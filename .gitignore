@@ -1,0 +1,27 @@
+# --- R / RStudio / Quarto ---
+.DS_Store
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+.quarto/
+*_files/
+*_cache/
+output/
+__pycache__/
+
+# --- never published: course administration (enrolment lists, emails,
+# certificates, attendance) and anything with participant data ---
+/admin/
+
+# --- working notes and old versions: local only ---
+/_archive/
+/archive/
+/rehearsal/
+/drafts/
+PLAN.md
+CHANGELOG.md
+DEVELOPMENT_TIMELINE.md
+HANDOFF*.md
+reading_plan_lmem_*.xlsx
+create_reading_plan.py
