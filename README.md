@@ -88,6 +88,7 @@ Una lectura principal por sesión (en negrita) y algunas complementarias. Todas 
 - Judd, C. M., Westfall, J., & Kenny, D. A. (2012). *Treating stimuli as a random factor in social psychology.* Journal of Personality and Social Psychology, 103(1), 54-69. Por qué los estímulos también son un factor aleatorio, con ejemplos de psicología social — <https://doi.org/10.1037/a0028347>
 - Lazic, S. E., & Essioux, L. (2013). *Improving basic and translational science by accounting for litter-to-litter variation in animal models.* BMC Neuroscience, 14, 37. La camada como unidad experimental y como efecto aleatorio — <https://doi.org/10.1186/1471-2202-14-37>
 - Meteyard, L., & Davies, R. A. I. (2020). *Best practice guidance for linear mixed-effects models in psychological science.* Journal of Memory and Language, 112, 104092. Cómo construir y, sobre todo, cómo reportar un modelo mixto — <https://doi.org/10.1016/j.jml.2020.104092>
+- Bates, D., Mächler, M., Bolker, B., & Walker, S. (2015). *Fitting linear mixed-effects models using lme4.* Journal of Statistical Software, 67(1), 1-48. El artículo del paquete, y la cita que hay que poner al reportar un modelo ajustado con `lme4`. Leer solo las secciones 1 y 2 (sintaxis de fórmulas y tabla de términos aleatorios) y 5 (cómo leer la salida, REML frente a ML, por qué `lmer` no da p-valores) — <https://doi.org/10.18637/jss.v067.i01>
 
 ### Día 2 — Estructura de efectos aleatorios
 
@@ -108,6 +109,15 @@ Una lectura principal por sesión (en negrita) y algunas complementarias. Todas 
 - **Brysbaert, M., & Stevens, M. (2018).** *Power analysis and effect size in mixed effects models: A tutorial.* Journal of Cognition, 1(1), 9 — <https://doi.org/10.5334/joc.10>
 - **DeBruine, L. M., & Barr, D. J. (2021).** *Understanding mixed-effects models through data simulation.* Advances in Methods and Practices in Psychological Science, 4(1). Simular datos con estructura mixta para entender el modelo y calcular potencia; materiales en OSF — <https://doi.org/10.1177/2515245920965119>
 - Kumle, L., Võ, M. L.-H., & Draschkow, D. (2021). *Estimating power in (generalized) linear mixed models: An open introduction and tutorial in R.* Behavior Research Methods, 53, 2528-2543 — <https://doi.org/10.3758/s13428-021-01546-0>
+
+---
+
+## Para seguir después del curso
+
+Dos caminos naturales cuando el modelo mixto frecuentista ya no sea un problema:
+
+- **Análisis bayesiano con brms.** Bürkner, P.-C. (2017). *brms: An R package for Bayesian multilevel models using Stan.* Journal of Statistical Software, 80(1), 1-28. La misma sintaxis de fórmulas que `lme4`, con distribuciones a priori, incertidumbre sobre todos los parámetros y familias que `lme4` no cubre (ordinal, distribucional, no lineal) — <https://doi.org/10.18637/jss.v080.i01>
+- **Modelos mixtos en Julia.** Alday, P., Kliegl, R., & Bates, D. (2026). *Embrace Uncertainty: Mixed-effects models with Julia.* Libro en línea. El paquete `MixedModels.jl`, del mismo autor que `lme4`, mucho más rápido: la opción cuando los datos o las simulaciones de potencia se hacen grandes — <https://embraceuncertaintybook.com/>
 
 ---
 
