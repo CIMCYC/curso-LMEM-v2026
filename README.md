@@ -73,7 +73,7 @@ El material se publica poco a poco a lo largo del curso, se puede descargar de l
 
 **2. Descargar solo un archivo nuevo.** En GitHub, entra en el archivo y pulsa el botón de descarga (*Download raw file*). Guárdalo en la misma carpeta que tenías.
 
-**3. Clonar el repositorio con git.** Necesitas tener [git](https://git-scm.com/downloads) instalado. 
+**3. Clonar el repositorio con git.** Necesitas tener [git](https://git-scm.com/downloads) instalado. Busca un tutorial en internet.
 
 
 ---
