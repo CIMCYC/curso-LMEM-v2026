@@ -23,13 +23,12 @@
 
 ## Lecturas recomendadas
 
-Una lectura principal por sesión (en negrita) y algunas complementarias. Todas son tutoriales o artículos de métodos.
 
 ### Día 1 — Del modelo lineal a los modelos lineales mixtos
 
 - **Winter, B. (2013).** *Linear models and linear mixed effects models in R with linguistic applications.* <https://arxiv.org/abs/1308.5499> 
 	- Dos tutoriales cortos y accesibles para personas con poca o muy poca experiencia con LMEM.
-- Brown, V. A. (2021). *An introduction to linear mixed-effects modeling in R.* Advances in Methods and Practices in Psychological Science, 4(1). <https://doi.org/10.1177/2515245920960351>
+- **Brown, V. A. (2021).** *An introduction to linear mixed-effects modeling in R.* Advances in Methods and Practices in Psychological Science, 4(1). <https://doi.org/10.1177/2515245920960351>
 	- Introducción conceptual y práctica a LMEM, con datos y código en OSF.
 
 
@@ -43,7 +42,7 @@ Una lectura principal por sesión (en negrita) y algunas complementarias. Todas 
 ### Día 3 — Codificación de contrastes y modelos lineales generalizados
 
 - **Schad, D. J., Vasishth, S., Hohenstein, S., & Kliegl, R. (2020).** *How to capitalize on a priori contrasts in linear (mixed) models: A tutorial.* Journal of Memory and Language, 110, 104038 <https://doi.org/10.1016/j.jml.2019.104038>
-- Winter, B. (2019). *Statistics for Linguists: An Introduction Using R.* Routledge.  <https://doi.org/10.4324/9781315165547>
+- **Winter, B. (2019).** *Statistics for Linguists: An Introduction Using R.* Routledge.  <https://doi.org/10.4324/9781315165547>
 	- Capítulos de modelos lineales generalizados (regresión logística y de Poisson).
 
 
@@ -74,23 +73,7 @@ El material se publica poco a poco a lo largo del curso, se puede descargar de l
 
 **2. Descargar solo un archivo nuevo.** En GitHub, entra en el archivo y pulsa el botón de descarga (*Download raw file*). Guárdalo en la misma carpeta que tenías.
 
-**3. Clonar el repositorio con git.** Necesitas tener [git](https://git-scm.com/downloads) instalado. La primera vez, en la pestaña *Terminal* de RStudio (junto a *Console*; si no la ves: `Tools` → `Terminal` → `New Terminal`, o `Option + Shift + R` en Mac / `Alt + Shift + R` en Windows), entra en tu carpeta Documentos y clona el repositorio:
-
-```bash
-cd ~/Documents
-git clone [POR DEFINIR: URL del repositorio final en la organización CIMCYC]
-```
-
-Cada vez que haya material nuevo, abre el proyecto del curso y escribe en la *Terminal*:
-
-```bash
-git pull
-```
-
-`git pull` descarga **solo lo que ha cambiado** desde la última vez.
-
-> [!TIP]
-> Para que `git pull` no choque con tus cambios, guarda tu trabajo con otro nombre: abre el script del día y usa `File` → `Save As`.
+**3. Clonar el repositorio con git.** Necesitas tener [git](https://git-scm.com/downloads) instalado. 
 
 
 ---
