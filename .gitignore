@@ -25,3 +25,6 @@ DEVELOPMENT_TIMELINE.md
 HANDOFF*.md
 reading_plan_lmem_*.xlsx
 create_reading_plan.py
+
+# --- rendered tutorials (15 MB each, embed-resources): render locally ---
+exercises/scripts/*.html

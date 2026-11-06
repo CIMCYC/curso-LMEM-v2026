@@ -1,0 +1,1338 @@
+---
+title: "Winter (2013), Tutorial 1: el modelo lineal"
+subtitle: "Reproducción paso a paso"
+author: "Filip Andras — CIMCYC, Universidad de Granada"
+date: today
+date-format: "D MMMM YYYY"
+lang: es
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-depth: 3
+    embed-resources: true
+    code-fold: false     # tutorial: el codigo se muestra siempre
+    code-tools: true
+    fig-format: retina   # 2x para pantallas HiDPI; cada figura se muestra a su tamano de diseno
+    grid:
+      body-width: 780px     # ~85 caracteres de prosa; 80 de codigo sin partir
+      sidebar-width: 220px
+      margin-width: 400px   # figuras al margen (Tufte)
+    include-in-header:
+      - text: |
+          <style>
+          /* no horizontal scrollbar on wide console output (required) */
+          pre { white-space: pre-wrap; word-wrap: break-word; }
+          /* rendered output (results/console): grey left edge. Code chunks left unstyled. */
+          div.cell-output, div.cell-output-stdout {
+            border-left: 4px solid #bdbdbd;
+            border-radius: 4px;
+            background-color: #fcfcfc;
+            padding-left: 0.6em;
+            margin-top: 0.3em;
+          }
+          /* figures: no box (Tufte-like margin figures) */
+          div.cell-output-display { border-left: none; background-color: transparent; padding-left: 0; }
+          /* margin notes: space between paragraphs (Quarto removes it by default) */
+          .column-margin.column-container p { margin-bottom: 0.7em; }
+          .column-margin.column-container p:last-child { margin-bottom: 0; }
+          </style>
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+# install.packages(c("tidyverse", "patchwork", "here", "performance", "see"))
+library(tidyverse)
+library(patchwork)  # para juntar varios graficos en una figura
+library(here)       # rutas desde la raiz del proyecto (exercises.Rproj)
+library(see)        # dibuja los graficos de performance::check_model()
+
+options(scipen = 999, width = 80)  # emparejado con body-width: 780px
+options(pillar.sigfig = 5)  # tibbles con 5 cifras significativas (226.33, no 226.)
+```
+
+Este documento sigue el primer tutorial de Winter (2013), *Linear models and linear mixed effects models in R with linguistic applications* (arXiv:1308.5499).
+
+# La idea en una ecuación
+
+Un modelo lineal dice que la variable que queremos explicar es una recta más un error:
+
+```{r}
+#| label: t1-equation
+#| echo: false
+#| fig-width: 8
+#| fig-height: 2.6
+
+# La ecuacion con sus piezas senaladas (solo presentacion)
+red <- "#C0392B"
+tok <- tibble(x = c(2.0, 2.8, 3.6, 4.4, 5.2, 5.8, 6.4, 7.2, 8.0),
+              lab = c("italic(y)", "'='", "alpha", "'+'", "beta", "'·'", "italic(x)", "'+'", "epsilon"))
+ggplot() +
+  geom_text(data = tok, mapping = aes(x = x, y = 1, label = lab), parse = TRUE,
+            family = "serif", size = 11) +
+  annotate("segment", x = c(1.9, 3.6, 5.15, 6.4, 8.1), xend = c(1.35, 3.6, 4.75, 6.4, 8.65),
+           y = 0.78, yend = c(0.42, 0.45, -0.25, 0.45, 0.42), colour = red, linewidth = 0.6) +
+  annotate("text", x = 1.35, y = 0.38, hjust = 1, vjust = 1, colour = red, fontface = "italic", size = 4.2,
+           lineheight = 0.9, label = "respuesta\noutcome\nvariable dependiente") +
+  annotate("text", x = 3.6, y = 0.41, vjust = 1, colour = red, fontface = "italic", size = 4.2,
+           lineheight = 0.9, label = "intercepto:\ny cuando x = 0") +
+  annotate("text", x = 4.6, y = -0.29, vjust = 1, colour = red, fontface = "italic", size = 4.2,
+           lineheight = 0.9, label = "pendiente:\n+1 en x, +β en y") +
+  annotate("text", x = 6.4, y = 0.41, vjust = 1, colour = red, fontface = "italic", size = 4.2,
+           lineheight = 0.9, label = "predictor\nvariable independiente\nexplicativa, regresor\nefecto fijo") +
+  annotate("text", x = 8.65, y = 0.38, hjust = 0, vjust = 1, colour = red, fontface = "italic", size = 4.2,
+           lineheight = 0.9, label = "error: lo que la\nrecta no explica") +
+  scale_x_continuous(limits = c(-1.3, 10.8)) +
+  scale_y_continuous(limits = c(-0.95, 1.25)) +
+  theme_void()
+```
+
+::: {.column-margin}
+Cómo se leen las letras griegas:
+
+- $\alpha$: alfa
+- $\beta$: beta
+- $\varepsilon$: épsilon
+- $\sigma$: sigma
+:::
+
+::: {.callout-note}
+A veces $\alpha$ se escribe $\beta_0$ ("beta cero") y $\beta$ se escribe $\beta_1$ ("beta uno"):
+
+$$
+y = \beta_0 + \beta_1 \cdot x + \varepsilon
+$$
+:::
+
+En R el mismo modelo se escribe `y ~ x`: la virgulilla se lee "en función de", y R añade por su cuenta $\alpha$ y $\varepsilon$.
+
+**Ejemplo:**
+
+```{r}
+#| label: t1-idea-figure
+#| echo: false
+#| fig-width: 8.5
+#| fig-height: 3.9
+
+# Doce palabras espanolas con frecuencia y tiempo de respuesta INVENTADOS
+# (verosimiles, construidos para el ejemplo; no son datos de un experimento)
+palabras <- tibble(
+  palabra = c("tiempo", "casa", "agua", "mesa", "perro", "nube",
+              "lámpara", "cebolla", "efímero", "albornoz", "zozobra", "alféizar"),
+  frecuencia = c(1200, 900, 600, 150, 120, 40, 20, 10, 5, 3, 2, 1.2),  # por millon
+  tr = c(629, 584, 638, 636, 719, 702, 791, 720, 854, 777, 846, 799)     # ms
+) |>
+  mutate(log_frec = log10(frecuencia))
+
+red <- "#C0392B"  # el rojo de las anotaciones
+
+# La recta que ajusta lm(); alpha y beta salen de coef()
+model_pal <- lm(formula = tr ~ log_frec, data = palabras)
+b0 <- coef(model_pal)[1]
+b1 <- coef(model_pal)[2]
+
+# El punto que usaremos para senalar el error: "lampara"
+punto <- palabras[7, ] |> mutate(y_recta = b0 + b1 * log_frec)
+
+# Panel (a): solo los datos, con todas las palabras
+p_datos <- ggplot(data = palabras, mapping = aes(x = log_frec, y = tr)) +
+  geom_point(size = 2.4, colour = "grey45") +
+  ggrepel::geom_text_repel(mapping = aes(label = palabra), size = 3, colour = "grey25",
+                           seed = 1, box.padding = 0.3, min.segment.length = Inf) +
+  scale_x_continuous(breaks = 0:3, limits = c(-0.15, 3.4)) +
+  scale_y_continuous(limits = c(490, 920)) +
+  labs(x = "Frecuencia (log10, por mill\u00f3n)", y = "Tiempo de respuesta (ms)",
+       title = "(a) Los datos") +
+  theme_classic(base_size = 11)
+
+# Panel (b): la recta de lm() y sus piezas
+p_modelo <- ggplot(data = palabras, mapping = aes(x = log_frec, y = tr)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_abline(intercept = b0, slope = b1, linewidth = 0.8) +
+  geom_point(size = 2.4, colour = "grey45") +
+  annotate("point", x = 0, y = b0, shape = 22, size = 4.5, fill = "white") +
+  annotate("segment", x = 2, xend = 3, y = b0 + b1 * 2, yend = b0 + b1 * 2,
+           colour = "grey25", linewidth = 0.8) +
+  annotate("segment", x = 3, xend = 3, y = b0 + b1 * 2, yend = b0 + b1 * 3,
+           colour = "grey25", linewidth = 0.8) +
+  annotate("segment", x = punto$log_frec, xend = punto$log_frec, y = punto$y_recta, yend = punto$tr,
+           colour = "grey25", linewidth = 0.8, linetype = "dotted") +
+  scale_x_continuous(breaks = 0:3, limits = c(-0.15, 3.4)) +
+  scale_y_continuous(limits = c(490, 920)) +
+  # etiquetas en rojo, con una linea hasta cada pieza (como en la ecuacion)
+  annotate("segment", x = 0.42, xend = 0.06, y = 668, yend = 832, colour = red, linewidth = 0.5) +
+  annotate("text", x = 0.45, y = 655, hjust = 0, vjust = 1, colour = red, fontface = "italic",
+           size = 3.3, lineheight = 0.9, label = "\u03b1: intercepto\n(y cuando x = 0)") +
+  annotate("segment", x = c(2.15, 2.35), xend = c(2.5, 2.97), y = 555, yend = c(686, 650),
+           colour = red, linewidth = 0.5) +
+  annotate("text", x = 2.25, y = 548, vjust = 1, colour = red, fontface = "italic",
+           size = 3.3, lineheight = 0.9, label = "\u03b2: pendiente\n(+1 en x, +\u03b2 en y)") +
+  annotate("segment", x = 1.62, xend = 1.33, y = 852, yend = punto$y_recta + 22, colour = red, linewidth = 0.5) +
+  annotate("text", x = 1.65, y = 885, hjust = 0, vjust = 1, colour = red, fontface = "italic",
+           size = 3.3, lineheight = 0.9, label = "\u03b5: el error\nde esta palabra") +
+  labs(x = "Frecuencia (log10, por mill\u00f3n)", y = NULL, title = "(b) El modelo") +
+  theme_classic(base_size = 11)
+
+p_datos + p_modelo
+```
+
+::: {.column-margin}
+Doce palabras, su frecuencia de uso ($x$, en logaritmo) y el tiempo que se tarda en reconocerlas ($y$). Datos inventados.
+
+En (a), los datos. En (b), la recta de `lm()`: el cuadrado blanco es $\alpha$, el escalón es $\beta$ y la línea punteada es el $\varepsilon$ de una palabra.
+
+Las palabras frecuentes se reconocen antes: la pendiente es negativa.
+:::
+
+### Pruébalo: busca los parámetros
+
+```{r}
+#| label: t1-idea-widget
+#| echo: false
+#| results: asis
+
+# El widget (HTML + JS) vive en widgets/; aqui solo se le pasan los datos y la
+# recta de lm() y se inyecta en el documento como bloque HTML. No hace falta
+# servidor: funciona en el HTML autocontenido.
+widget_html <- readLines(con = "widgets/lm_widget.html", encoding = "UTF-8", warn = FALSE)
+widget_js   <- readLines(con = "widgets/lm_widget.js", encoding = "UTF-8", warn = FALSE)
+widget_data <- paste0(
+  "window.LMW = {xs: [", paste(signif(palabras$log_frec, 12), collapse = ", "),
+  "], ys: [", paste(palabras$tr, collapse = ", "),
+  "], fit: [", signif(coef(model_pal)[1], 12), ", ", signif(coef(model_pal)[2], 12), "],",
+  " xr: {min: -0.2, max: 3.4}, xticks: [0, 1, 2, 3],",
+  " yr: {min: 500, max: 950}, yticks: [500, 600, 700, 800, 900],",
+  " rr: {min: -250, max: 250}, rticks: [-200, -100, 0, 100, 200],",
+  " labels: {x: 'Frecuencia (log10)', y: 'Tiempo de respuesta (ms)', res: 'Residuo (ms)'},",
+  " digits: 0, s0: {min: 600, max: 1000, step: 1, start: 760},",
+  " s1: {min: -200, max: 50, step: 1, start: 0}};")
+# El HTML se parte en dos: la parte de arriba (deslizadores y recta) aqui, la
+# vista girada en el bloque siguiente, para poder poner su texto al margen
+split_at <- grep(pattern = "SPLIT", x = widget_html)
+widget_top    <- widget_html[seq_len(split_at - 1)]
+widget_bottom <- widget_html[(split_at + 1):length(widget_html)]
+cat("```{=html}\n", paste(widget_top, collapse = "\n"), "\n```\n", sep = "")
+```
+
+::: {.column-margin}
+Las mismas doce palabras, con una recta plana para empezar.
+
+**$\alpha$** sube y baja la recta. **$\beta$** la inclina.
+
+Mira los residuos (líneas punteadas) y sus cuadrados: cada área es un residuo al cuadrado. `lm()` elige la recta con la menor suma de áreas; el botón te lleva a ella.
+:::
+
+```{r}
+#| label: t1-idea-widget-rotated
+#| echo: false
+#| results: asis
+
+# La vista girada y el JavaScript que dibuja las dos partes
+# el JavaScript se inserta dentro del mismo div (marca SCRIPT), para que la vista
+# girada sea un solo elemento y la nota del margen quede a su lado
+script_at <- grep(pattern = "SCRIPT", x = widget_bottom)
+widget_bottom[script_at] <- paste0("<script>\n", widget_data, "\n",
+                                   paste(widget_js, collapse = "\n"), "\n</script>")
+cat("```{=html}\n", paste(widget_bottom, collapse = "\n"), "\n```\n", sep = "")
+```
+
+::: {.column-margin}
+La misma figura girada: la recta es ahora la horizontal en cero y cada residuo cuelga de ella. A la derecha, tumbada, la campana normal ajustada a los residuos de la recta actual: su centro es la media de los residuos, <b id="lmw-rmean"></b> (la línea gris discontinua), y su anchura es $\sigma$ = <b id="lmw-sigma"></b> (la línea roja, del centro al punto de inflexión). Con un intercepto malo la campana se desplaza; con una pendiente mala se ensancha. Con la recta de `lm()` queda centrada en la recta y es la más estrecha posible: eso es lo que el modelo asume de los errores.
+:::
+
+Eso es lo que falta en la ecuación de arriba: de dónde vienen los errores. El modelo asume que **son normales**, con media cero y una única desviación típica $\sigma$, e **independientes** entre sí:
+
+$$
+\varepsilon_i \overset{\text{iid}}{\sim} \mathcal{N}(0, \sigma^2)
+$$
+
+::: {.column-margin}
+*iid*: **independientes e idénticamente distribuidos**. Cada $\varepsilon_i$, el error de la palabra $i$, sale de la misma normal, con la misma $\sigma$, y no depende de los errores de las demás palabras.
+
+$\sigma$ es la **desviación típica del error**: cuánto se apartan los puntos de la recta en general, la línea roja de la figura (del centro de la campana a su punto de inflexión). Es el cuarto número del modelo, junto a $\alpha$ y $\beta$, y la salida de `lm()` lo llama *Residual standard error*. Las tres palabras de la frase, normal, una sola $\sigma$ e independientes, son los supuestos que repasaremos al final del tutorial.
+:::
+
+# Más ejemplos: Winter (2013)
+
+## Tono de voz en función del sexo
+
+> Imagina que no sabes nada sobre hombres y mujeres y quieres saber si su tono de voz es distinto y, si lo es, cuánto. Pides a unas cuantas personas que digan una palabra y mides su tono. En los datos de abajo, las mujeres parecen unos 100 Hz más agudas. Pero puede que hayas tenido mala suerte con la muestra. El modelo lineal da una estimación precisa de la diferencia y de la probabilidad de verla solo por azar.
+>
+> Resumido de Winter (2013, pp. 1-2).
+
+Winter lo escribe como `pitch ~ sex + ε`: el tono "en función de" el sexo, más ruido. Aquí el predictor no es un número sino una categoría con dos niveles, `female` y `male`. En la figura del margen, cada grupo es una columna de puntos, el guion gris es su media y la recta une las dos medias. La "línea más ruido" sigue siendo la misma idea: la recta es el modelo, y el ruido es lo que cada persona se aparta de la media de su grupo.
+
+Seis datos inventados por Winter: el tono de voz (Hz) de tres mujeres y tres hombres.
+
+```{r}
+#| label: t1-sex-data
+
+pitch_sex <- tibble(
+  sex   = c(rep("female", 3), rep("male", 3)),
+  pitch = c(233, 204, 242, 130, 112, 142)
+)
+print(pitch_sex)
+```
+
+::: {.column-margin}
+```{r}
+#| label: t1-sex-data-figure
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 3.8
+
+# Los seis datos por grupo; el guion gris es la media de cada grupo y la
+# recta que une las dos medias es el modelo
+ggplot(data = pitch_sex, mapping = aes(x = sex, y = pitch)) +
+  stat_summary(fun = mean, geom = "line", mapping = aes(group = 1),
+               colour = "black", linewidth = 0.8) +
+  stat_summary(fun = mean, geom = "crossbar", width = 0.35,
+               colour = "grey25", linewidth = 0.4) +
+  geom_point(size = 2.8, colour = "grey45") +
+  labs(x = NULL, y = "Tono (Hz)") +
+  theme_classic(base_size = 11)
+```
+:::
+
+```{r}
+#| label: t1-sex-model
+
+model_sex <- lm(formula = pitch ~ sex, data = pitch_sex)
+summary(model_sex)
+```
+
+::: {.column-margin}
+Qué mirar en la salida:
+
+- `(Intercept)` es la media del grupo de referencia. R toma como referencia el primer nivel por orden alfabético, `female`.
+- `sexmale` es la diferencia entre la media de `male` y la de `female`. La media de los hombres es el intercepto más ese coeficiente. Su p-valor contrasta si esa diferencia es cero.
+- `Multiple R-squared` es la proporción de varianza del tono explicada por el sexo.
+- La F del final contrasta el modelo completo contra el modelo sin predictores. Con un solo predictor, su p-valor coincide con el del coeficiente.
+
+La salida, en la ecuación:
+
+```{r}
+#| label: t1-sex-equation
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 2.1
+
+# La ecuacion del modelo con los numeros de la salida de summary(); los
+# numeros salen del modelo con coef() y sigma() (solo presentacion)
+red <- "#C0392B"
+b0_txt <- sprintf("%.2f", coef(model_sex)[1])
+b1_txt <- sprintf("%.2f", abs(coef(model_sex)[2]))
+s_txt  <- sprintf("%.2f", sigma(model_sex))
+# Fila 1: la recta con los numeros de la salida
+eq1 <- tibble(x = c(0.83, 1.96, 3.37, 4.67, 5.85, 6.88, 7.32, 8.0, 8.62),
+              lab = c("pitch", "=", b0_txt, "\u2212", b1_txt, "\u00b7", "x", "+", "\u03b5"),
+              face = c("plain", "plain", "plain", "plain", "plain", "plain", "italic", "plain", "italic"))
+p <- ggplot() +
+  geom_text(data = eq1, mapping = aes(x = x, y = 1.45, label = lab, fontface = face),
+            family = "serif", size = 7) +
+  # lineas y nombres de la salida de R (rojo, en letra de consola)
+  annotate("segment", x = c(3.37, 5.75), xend = c(3.25, 5.85), y = 1.2, yend = 1.02,
+           colour = red, linewidth = 0.45) +
+  annotate("text", x = c(3.2, 5.9), y = 0.95, vjust = 1, colour = red, family = "mono",
+           size = 3.6, label = c("(Intercept)", "sexmale")) +
+  annotate("segment", x = 7.38, xend = 7.85, y = 1.2, yend = 1.02, colour = "grey45", linewidth = 0.45) +
+  annotate("text", x = 8.05, y = 0.95, vjust = 1, colour = "grey35", size = 3.4, lineheight = 0.95,
+           label = "0 = female\n1 = male") +
+  # Fila 2: el error y sigma
+  annotate("text", x = 0.17, y = 0.0, hjust = 0, family = "serif", fontface = "italic", size = 6,
+           label = "\u03b5 ~ N(0, \u03c3\u00b2)") +
+  annotate("text", x = c(5.55, 6.2), y = 0.0, family = "serif", size = 6,
+           fontface = c("italic", "plain"), label = c("\u03c3", "=")) +
+  annotate("text", x = 7.3, y = 0.0, family = "serif", size = 6, label = s_txt) +
+  annotate("segment", x = 7.3, xend = 7.3, y = -0.25, yend = -0.43, colour = red, linewidth = 0.45) +
+  annotate("text", x = 7.3, y = -0.5, vjust = 1, colour = red, family = "mono", size = 3.6,
+           label = "Residual standard error") +
+  scale_x_continuous(limits = c(0, 10), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(-0.8, 1.8), expand = c(0, 0)) +
+  coord_cartesian(clip = "off") +
+  theme_void()
+p
+```
+
+El modelo con los números que ha estimado `lm()` (intercepto `r round(coef(model_sex)[1], 1)`, pendiente `r round(coef(model_sex)[2], 1)`):
+
+$$
+\text{Pitch}_{\text{mujeres}} = `r round(coef(model_sex)[1], 1)` + (`r round(coef(model_sex)[2], 1)`) \cdot 0 = `r round(coef(model_sex)[1], 1)`
+$$
+
+$$
+\text{Pitch}_{\text{hombres}} = `r round(coef(model_sex)[1], 1)` + (`r round(coef(model_sex)[2], 1)`) \cdot 1 = `r round(coef(model_sex)[1] + coef(model_sex)[2], 1)`
+$$
+:::
+
+Comprobación de las dos medias:
+
+```{r}
+#| label: t1-sex-means
+
+# La media del tono en cada grupo: agrupar por sexo y resumir
+pitch_means <- pitch_sex |>
+  group_by(sex) |>
+  summarise(mean_pitch = mean(pitch))
+pitch_means
+```
+
+### Por qué 0 = mujer y 1 = hombre
+
+Para dibujar una recta, R necesita que el sexo sea un número. Convierte la variable en un factor y ordena sus niveles alfabéticamente. El primer nivel, `female`, pasa a ser el 0, la referencia. El segundo, `male`, es el 1. El intercepto es el valor de la recta en x = 0, así que es la media de las mujeres.
+
+**El orden por defecto: `female` = 0.**
+
+```{r}
+#| label: t1-sex-levels-default
+
+# factor() ordena los niveles alfabeticamente;
+# el primero es la referencia (el 0)
+pitch_sex <- pitch_sex |>
+  mutate(sex = factor(sex))
+levels(pitch_sex$sex)
+
+model_female_ref <- lm(formula = pitch ~ sex, data = pitch_sex)
+coef(model_female_ref)
+```
+
+::: {.column-margin}
+```{r}
+#| label: t1-sex-levels-default-figure
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 3.4
+
+# El modelo con female = 0: la recta pasa por las dos medias y en x = 0
+# (linea discontinua) vale el intercepto (cuadrado blanco)
+red <- "#C0392B"
+b_f <- coef(model_female_ref)
+ggplot(data = pitch_sex,
+       mapping = aes(x = if_else(sex == "female", 0, 1), y = pitch)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_abline(intercept = b_f[1], slope = b_f[2], linewidth = 0.8) +
+  geom_point(size = 2.6, colour = "grey45") +
+    # la pendiente: un paso de 0 a 1 en x y lo que cambia y
+  annotate("segment", x = c(0, 1), xend = c(1, 1),
+           y = c(b_f[1] + b_f[2] * 0, b_f[1] + b_f[2] * 0),
+           yend = c(b_f[1] + b_f[2] * 0, b_f[1] + b_f[2] * 1),
+           colour = red, linewidth = 0.5, linetype = "dashed") +
+  annotate("text", x = 1.04, y = b_f[1] + b_f[2] * (0 + 1) / 2, hjust = 0,
+           colour = red, fontface = "italic", size = 3.6, lineheight = 0.9,
+           label = paste0("pendiente =\n", sprintf("%+.2f", b_f[2]))) +
+annotate("point", x = 0, y = b_f[1], shape = 22, size = 4, fill = "white") +
+  annotate("text", x = 0.08, y = b_f[1] + 14, hjust = 0, colour = red,
+           fontface = "italic", size = 3.6,
+           label = paste0("intercepto = ", sprintf("%.2f", b_f[1]))) +
+  scale_x_continuous(breaks = c(0, 1), labels = c("0\nfemale", "1\nmale"),
+                     limits = c(-0.3, 1.5)) +
+  scale_y_continuous(limits = c(100, 260)) +
+  labs(x = NULL, y = "Tono (Hz)") +
+  theme_classic(base_size = 11)
+```
+:::
+
+Es el mismo modelo de antes. `(Intercept)` es la media de las mujeres y `sexmale` es lo que cambia el tono al pasar de 0 a 1.
+
+**Cambiar la referencia: `male` = 0.**
+
+```{r}
+#| label: t1-sex-levels-male
+
+# levels = fija el orden de los niveles: male primero, asi male es el 0
+pitch_sex <- pitch_sex |>
+  mutate(sex = factor(sex, levels = c("male", "female")))
+levels(pitch_sex$sex)
+
+model_male_ref <- lm(formula = pitch ~ sex, data = pitch_sex)
+coef(model_male_ref)
+```
+
+::: {.column-margin}
+```{r}
+#| label: t1-sex-levels-male-figure
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 3.4
+
+# El modelo con male = 0: el intercepto es ahora la media de los hombres
+b_m <- coef(model_male_ref)
+ggplot(data = pitch_sex,
+       mapping = aes(x = if_else(sex == "male", 0, 1), y = pitch)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_abline(intercept = b_m[1], slope = b_m[2], linewidth = 0.8) +
+  geom_point(size = 2.6, colour = "grey45") +
+    # la pendiente: un paso de 0 a 1 en x y lo que cambia y
+  annotate("segment", x = c(0, 1), xend = c(1, 1),
+           y = c(b_m[1] + b_m[2] * 0, b_m[1] + b_m[2] * 0),
+           yend = c(b_m[1] + b_m[2] * 0, b_m[1] + b_m[2] * 1),
+           colour = red, linewidth = 0.5, linetype = "dashed") +
+  annotate("text", x = 1.04, y = b_m[1] + b_m[2] * (0 + 1) / 2, hjust = 0,
+           colour = red, fontface = "italic", size = 3.6, lineheight = 0.9,
+           label = paste0("pendiente =\n", sprintf("%+.2f", b_m[2]))) +
+annotate("point", x = 0, y = b_m[1], shape = 22, size = 4, fill = "white") +
+  annotate("text", x = 0.08, y = b_m[1] - 14, hjust = 0, colour = red,
+           fontface = "italic", size = 3.6,
+           label = paste0("intercepto = ", sprintf("%.2f", b_m[1]))) +
+  scale_x_continuous(breaks = c(0, 1), labels = c("0\nmale", "1\nfemale"),
+                     limits = c(-0.3, 1.5)) +
+  scale_y_continuous(limits = c(100, 260)) +
+  labs(x = NULL, y = "Tono (Hz)") +
+  theme_classic(base_size = 11)
+```
+:::
+
+Ahora `(Intercept)` es la media de los hombres. La pendiente, `sexfemale`, es la misma distancia que antes con el signo cambiado.
+
+::: {.callout-note}
+Este esquema, con un grupo de referencia en el 0 y el otro en el 1, es lo que se llama *treatment coding*.
+:::
+
+**Otros tipos de contrastes: -0.5 y +0.5.**
+
+```{r}
+#| label: t1-sex-deviation
+
+# deviation coding: cada grupo a media unidad del 0
+pitch_sex <- pitch_sex |>
+  mutate(sex_dev = if_else(sex == "female", -0.5, 0.5))
+
+model_sex_dev <- lm(formula = pitch ~ sex_dev, data = pitch_sex)
+coef(model_sex_dev)
+```
+
+::: {.column-margin}
+```{r}
+#| label: t1-sex-deviation-figure
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 3.4
+
+# El modelo con -0.5 / +0.5: el 0 queda entre los dos grupos y el intercepto
+# es la media de las dos medias
+b_d <- coef(model_sex_dev)
+ggplot(data = pitch_sex, mapping = aes(x = sex_dev, y = pitch)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_abline(intercept = b_d[1], slope = b_d[2], linewidth = 0.8) +
+  geom_point(size = 2.6, colour = "grey45") +
+    # la pendiente: un paso de -0.5 a 0.5 en x y lo que cambia y
+  annotate("segment", x = c(-0.5, 0.5), xend = c(0.5, 0.5),
+           y = c(b_d[1] + b_d[2] * -0.5, b_d[1] + b_d[2] * -0.5),
+           yend = c(b_d[1] + b_d[2] * -0.5, b_d[1] + b_d[2] * 0.5),
+           colour = red, linewidth = 0.5, linetype = "dashed") +
+  annotate("text", x = 0.54, y = b_d[1] + b_d[2] * (-0.5 + 0.5) / 2, hjust = 0,
+           colour = red, fontface = "italic", size = 3.6, lineheight = 0.9,
+           label = paste0("pendiente =\n", sprintf("%+.2f", b_d[2]))) +
+annotate("point", x = 0, y = b_d[1], shape = 22, size = 4, fill = "white") +
+  annotate("text", x = -0.06, y = b_d[1] - 16, hjust = 1, colour = red,
+           fontface = "italic", size = 3.6,
+           label = paste0("intercepto = ", sprintf("%.2f", b_d[1]))) +
+  scale_x_continuous(breaks = c(-0.5, 0, 0.5),
+                     labels = c("-0.5\nfemale", "0", "+0.5\nmale"),
+                     limits = c(-0.8, 1.0)) +
+  scale_y_continuous(limits = c(100, 260)) +
+  labs(x = NULL, y = "Tono (Hz)") +
+  theme_classic(base_size = 11)
+```
+:::
+
+El 0 queda en medio de los dos grupos, y `(Intercept)` es la media de las dos medias. La pendiente es la misma que con `female` = 0, porque la distancia entre los grupos sigue siendo 1. Esta es la codificación que usaremos en el curso.
+
+::: {.callout-note title="Lesson learned"}
+La codificación decide dónde está el 0, y el intercepto es siempre el valor de la recta en ese 0. Por eso cambia de una codificación a otra: media de las mujeres, media de los hombres, media de las dos medias. El tamaño de la diferencia entre los grupos es el mismo en las tres codificaciones, y las predicciones del modelo también.
+:::
+
+## Tono de voz en función de la edad
+
+Winter lo escribe como `pitch ~ age + ε`. Ahora el predictor es un número, la edad en años. En la figura del margen, cada punto es una persona y la recta es el modelo.
+
+Otros seis datos inventados: el tono de voz de seis personas de distinta edad.
+
+```{r}
+#| label: t1-age-data
+
+pitch_age <- tibble(
+  age   = c(14, 23, 35, 48, 52, 67),
+  pitch = c(252, 244, 240, 233, 212, 204)
+)
+print(pitch_age)
+```
+
+::: {.column-margin}
+```{r}
+#| label: t1-age-data-figure
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 3.4
+
+# Los seis datos y la recta de lm()
+ggplot(data = pitch_age, mapping = aes(x = age, y = pitch)) +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, colour = "black",
+              linewidth = 0.8) +
+  geom_point(size = 2.8, colour = "grey45") +
+  labs(x = "Edad (años)", y = "Tono (Hz)") +
+  theme_classic(base_size = 11)
+```
+:::
+
+Mismo modelo, ahora con un predictor continuo: la "línea" es una recta.
+
+```{r}
+#| label: t1-age-model
+
+model_age <- lm(formula = pitch ~ age, data = pitch_age)
+summary(model_age)
+```
+
+::: {.column-margin}
+Qué mirar en la salida:
+
+- `(Intercept)` es el tono predicho a los 0 años. No tiene sentido: nadie tiene 0 años en la muestra. Es un valor matemáticamente correcto pero ininterpretable.
+- `age` es el cambio en el tono (Hz) por cada año más de edad, la pendiente.
+
+La salida, en la ecuación:
+
+```{r}
+#| label: t1-age-equation
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 2.1
+
+# La ecuacion del modelo con los numeros de la salida de summary(); los
+# numeros salen del modelo con coef() y sigma() (solo presentacion)
+b0_txt <- sprintf("%.2f", coef(model_age)[1])
+b1_txt <- sprintf("%.2f", abs(coef(model_age)[2]))
+s_txt  <- sprintf("%.2f", sigma(model_age))
+# Fila 1: la recta con los numeros de la salida
+eq1 <- tibble(x = c(0.83, 1.96, 3.37, 4.67, 5.7, 6.52, 7.28, 8.22, 8.84),
+              lab = c("pitch", "=", b0_txt, "−", b1_txt, "·", "age", "+",
+                      "ε"),
+              face = c("plain", "plain", "plain", "plain", "plain", "plain", "italic",
+                       "plain", "italic"))
+ggplot() +
+  geom_text(data = eq1, mapping = aes(x = x, y = 1.45, label = lab, fontface = face),
+            family = "serif", size = 7) +
+  # lineas y nombres de la salida de R (rojo, en letra de consola)
+  annotate("segment", x = c(3.37, 5.4), xend = c(3.25, 5.6), y = 1.2, yend = 1.02,
+           colour = red, linewidth = 0.45) +
+  annotate("text", x = c(3.2, 5.65), y = 0.95, vjust = 1, colour = red,
+           family = "mono", size = 3.6, label = c("(Intercept)", "age")) +
+  annotate("segment", x = 7.28, xend = 7.6, y = 1.2, yend = 1.02, colour = "grey45",
+           linewidth = 0.45) +
+  annotate("text", x = 7.85, y = 0.95, vjust = 1, colour = "grey35", size = 3.4,
+           lineheight = 0.95, label = "edad\nen años") +
+  # Fila 2: el error y sigma
+  annotate("text", x = 0.17, y = 0.0, hjust = 0, family = "serif",
+           fontface = "italic", size = 6, label = "ε ~ N(0, σ²)") +
+  annotate("text", x = c(5.55, 6.2), y = 0.0, family = "serif", size = 6,
+           fontface = c("italic", "plain"), label = c("σ", "=")) +
+  annotate("text", x = 7.1, y = 0.0, family = "serif", size = 6, label = s_txt) +
+  annotate("segment", x = 7.1, xend = 7.1, y = -0.25, yend = -0.43, colour = red,
+           linewidth = 0.45) +
+  annotate("text", x = 7.1, y = -0.5, vjust = 1, colour = red, family = "mono",
+           size = 3.6, label = "Residual standard error") +
+  scale_x_continuous(limits = c(0, 10), expand = c(0, 0)) +
+  scale_y_continuous(limits = c(-0.8, 1.8), expand = c(0, 0)) +
+  coord_cartesian(clip = "off") +
+  theme_void()
+```
+
+El modelo con los números que ha estimado `lm()` (intercepto `r round(coef(model_age)[1], 1)`, pendiente `r round(coef(model_age)[2], 2)`):
+
+$$
+\text{Pitch}_{\text{0 años}} = `r round(coef(model_age)[1], 1)` + (`r round(coef(model_age)[2], 2)`) \cdot 0 = `r round(coef(model_age)[1], 1)`
+$$
+
+$$
+\text{Pitch}_{\text{14 años}} = `r round(coef(model_age)[1], 1)` + (`r round(coef(model_age)[2], 2)`) \cdot 14 = `r round(coef(model_age)[1] + coef(model_age)[2] * 14, 1)`
+$$
+:::
+
+## Centrar el predictor
+
+**La edad en años: x = 0 es la edad 0.**
+
+```{r}
+#| label: t1-age-coefs-raw
+
+coef(model_age)
+```
+
+::: {.column-margin}
+```{r}
+#| label: t1-age-raw-figure
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 3
+
+# Edad en anos: la recta se prolonga hasta la edad 0 (linea discontinua),
+# donde vale el intercepto (cuadrado blanco)
+b_a <- coef(model_age)
+ggplot(data = pitch_age, mapping = aes(x = age, y = pitch)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_abline(intercept = b_a[1], slope = b_a[2], linewidth = 0.8) +
+  geom_point(size = 2.6, colour = "grey45") +
+  # la pendiente: 20 anos en x y lo que cambia y
+  annotate("segment", x = c(0, 20), xend = c(20, 20),
+           y = c(b_a[1], b_a[1]), yend = c(b_a[1], b_a[1] + b_a[2] * 20),
+           colour = red, linewidth = 0.5, linetype = "dashed") +
+  annotate("text", x = 21.5, y = b_a[1] - 12, hjust = 0, colour = red,
+           fontface = "italic", size = 3.6, lineheight = 0.9,
+           label = paste0("pendiente = ", sprintf("%+.2f", b_a[2]),
+                          "\n(20 años: ", sprintf("%+.1f", b_a[2] * 20), ")")) +
+  annotate("point", x = 0, y = b_a[1], shape = 22, size = 4, fill = "white") +
+  annotate("text", x = 2, y = b_a[1] + 7, hjust = 0, colour = red,
+           fontface = "italic", size = 3.6,
+           label = paste0("intercepto = ", sprintf("%.2f", b_a[1]))) +
+  scale_x_continuous(limits = c(-5, 70)) +
+  scale_y_continuous(limits = c(195, 280)) +
+  labs(x = "Edad (años)", y = "Tono (Hz)") +
+  theme_classic(base_size = 11)
+```
+:::
+
+El intercepto es el valor de la recta en x = 0. Con la edad en años, x = 0 es la edad 0, lejos de los datos.
+
+**Centrar: x = 0 es la edad media.**
+
+Restando la media a la edad, el intercepto pasa a ser el tono predicho para una persona de edad media. La pendiente y su p-valor no cambian.
+
+```{r}
+#| label: t1-age-centred
+
+pitch_age <- pitch_age |>
+  mutate(age_c = age - mean(age))
+
+model_age_c <- lm(formula = pitch ~ age_c, data = pitch_age)
+summary(model_age_c)
+```
+
+::: {.column-margin}
+```{r}
+#| label: t1-age-centred-figure
+#| echo: false
+#| fig-width: 4.2
+#| fig-height: 3
+
+# Edad centrada: x = 0 es la edad media y el intercepto cae entre los datos
+b_c <- coef(model_age_c)
+ggplot(data = pitch_age, mapping = aes(x = age_c, y = pitch)) +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey60") +
+  geom_abline(intercept = b_c[1], slope = b_c[2], linewidth = 0.8) +
+  geom_point(size = 2.6, colour = "grey45") +
+  # la pendiente: 20 anos en x y lo que cambia y
+  annotate("segment", x = c(0, 20), xend = c(20, 20),
+           y = c(b_c[1], b_c[1]), yend = c(b_c[1], b_c[1] + b_c[2] * 20),
+           colour = red, linewidth = 0.5, linetype = "dashed") +
+  annotate("text", x = 4, y = 252, hjust = 0, colour = red,
+           fontface = "italic", size = 3.6, lineheight = 0.9,
+           label = paste0("pendiente = ", sprintf("%+.2f", b_c[2]),
+                          "\n(20 años: ", sprintf("%+.1f", b_c[2] * 20), ")")) +
+  annotate("point", x = 0, y = b_c[1], shape = 22, size = 4, fill = "white") +
+  annotate("text", x = -2, y = b_c[1] - 12, hjust = 1, colour = red,
+           fontface = "italic", size = 3.6,
+           label = paste0("intercepto = ", sprintf("%.2f", b_c[1]))) +
+  scale_x_continuous(limits = c(-45, 45)) +
+  scale_y_continuous(limits = c(195, 280)) +
+  labs(x = "Edad centrada (años respecto a la media)", y = "Tono (Hz)") +
+  theme_classic(base_size = 11)
+```
+:::
+
+::: {.callout-note title="Lesson learned"}
+Centrar no cambia la recta ni la pendiente: solo mueve el 0 del eje x. Con la edad en años, el intercepto es el tono a los 0 años, fuera de los datos. Con la edad centrada, es el tono a la edad media, en mitad de los datos.
+:::
+
+## Supuestos del modelo lineal
+
+```{r}
+#| label: t1-sim-words
+#| include: false
+
+# Simulamos 200 palabras con la recta de las doce del principio:
+# alpha = 843, beta = -76 y un error normal con sigma = 40.
+# Como los datos son simulados, sabemos que cumplen los supuestos: las
+# comprobaciones de abajo ensenan como se ve un modelo que los cumple.
+set.seed(2026)  # para que la simulacion salga igual cada vez
+palabras_sim <- tibble(
+  # la frecuencia (log10) de cada palabra, al azar entre 0 y 3.5
+  log_frec = runif(n = 200, min = 0, max = 3.5)
+) |>
+  mutate(
+    # la recta (alpha + beta * x) mas el error (normal, sigma = 40)
+    tr = 843 - 76 * log_frec + rnorm(n = 200, mean = 0, sd = 40)
+  )
+
+# El modelo sobre las 200 palabras: coef() recupera alpha y beta
+model_sim <- lm(formula = tr ~ log_frec, data = palabras_sim)
+coef(model_sim)
+```
+
+```{r}
+#| label: t1-assumptions-setup
+#| echo: false
+
+# Estetica comun de las figuras de supuestos (solo presentacion)
+theme_sup <- theme_classic(base_size = 11) +
+  theme(plot.title = element_text(size = 11, face = "bold"),
+        plot.title.position = "plot")
+
+# Datos y recta arriba, residuos frente a ajustados abajo (solo presentacion)
+fit_panels <- function(d, title) {
+  m <- lm(formula = y ~ x, data = d)
+  d <- d |> mutate(fit = fitted(m), res = residuals(m))
+  # el recuadro de Winter: un rectangulo alrededor de la recta que, girado
+  # hasta dejar la recta horizontal, es el grafico de residuos. Para que sus
+  # esquinas sean rectas en la figura, se calcula en la escala de la figura
+  # (y por k) y el panel se dibuja con coord_fixed(ratio = k).
+  a <- coef(m)[1]; b <- coef(m)[2]
+  k <- 0.75 * diff(range(d$x)) / diff(range(c(d$y, d$fit)))
+  u <- c(1, b * k) / sqrt(1 + (b * k)^2)       # direccion de la recta
+  v <- c(-b * k, 1) / sqrt(1 + (b * k)^2)      # perpendicular a la recta
+  px <- d$x; py <- d$y * k                     # puntos en la escala de la figura
+  t_along <- (px - 0) * u[1] + (py - a * k) * u[2]
+  t_perp  <- (px - 0) * v[1] + (py - a * k) * v[2]
+  h <- 1.1 * max(abs(t_perp)); t1 <- min(t_along); t2 <- max(t_along)
+  cx <- c(t1, t2, t2, t1) * u[1] + c(-h, -h, h, h) * v[1]
+  cy <- a * k + c(t1, t2, t2, t1) * u[2] + c(-h, -h, h, h) * v[2]
+  caja <- tibble(x = cx, y = cy / k)
+  h <- 1.1 * max(abs(d$res))
+  caja_res <- tibble(x = c(min(d$fit), max(d$fit), max(d$fit), min(d$fit)), y = c(-h, -h, h, h))
+  top <- ggplot(data = d, mapping = aes(x = x, y = y)) +
+    geom_polygon(data = caja, mapping = aes(x = x, y = y), fill = NA, colour = "grey40",
+                 linetype = "dashed", linewidth = 0.4) +
+    geom_segment(mapping = aes(xend = x, y = fit, yend = y),
+                 colour = "grey60", linewidth = 0.4, linetype = "dotted") +
+    geom_abline(intercept = coef(m)[1], slope = coef(m)[2], linewidth = 0.8) +
+    geom_point(size = 1.6, colour = "grey45") +
+    coord_fixed(ratio = k) +
+    labs(x = "x", y = "y", title = title) +
+    theme_sup
+  bottom <- ggplot(data = d, mapping = aes(x = fit, y = res)) +
+    geom_polygon(data = caja_res, mapping = aes(x = x, y = y), fill = NA, colour = "grey40",
+                 linetype = "dashed", linewidth = 0.4) +
+    geom_hline(yintercept = 0, colour = "black", linewidth = 0.8) +
+    geom_point(size = 1.6, colour = "grey45") +
+    labs(x = "Valores ajustados", y = "Residuos") +
+    theme_sup
+  list(top = top, bottom = bottom)
+}
+```
+
+### 1. Linealidad
+
+El error tiene media cero a cualquier altura de $x$: lo que la recta deja sin explicar no sigue ningún patrón.
+
+```{r}
+#| label: t1-assumption-linearity
+#| echo: false
+#| fig-width: 8
+#| fig-height: 5.6
+
+set.seed(10)
+lin_ok  <- tibble(x = runif(n = 60, min = 0, max = 10)) |>
+  mutate(y = 2 + 0.8 * x + rnorm(n = 60, sd = 1.2))
+lin_bad <- tibble(x = runif(n = 60, min = 0, max = 10)) |>
+  mutate(y = 0.5 + 0.004 * x^4 + rnorm(n = 60, sd = 0.8))
+ok  <- fit_panels(d = lin_ok, title = "Cumple: una recta")
+bad <- fit_panels(d = lin_bad, title = "No cumple: una curva")
+(ok$top | bad$top) / (ok$bottom | bad$bottom)
+```
+
+Si no se cumple: añadir el predictor que falta, transformar la respuesta (logaritmo) o añadir $x^2$.
+
+::: {.callout-note}
+"Lineal" se refiere a la **combinación lineal** de los predictores: la media de $y$ es una suma de términos, cada uno un predictor multiplicado por su coeficiente, como en $\alpha + \beta_1 x_1 + \beta_2 x_2$. Lo que tiene que ser lineal son los coeficientes, no los predictores. Por eso `y ~ x + I(x^2)` sigue siendo un modelo lineal aunque la curva ajustada sea una parábola: es $\alpha + \beta_1 x + \beta_2 x^2$, y cada coeficiente multiplica a su término y se suma. La recta ajustada no siempre tiene que ser una recta.
+:::
+
+**Verificar mediante el paquete `performance`**
+
+```{r}
+#| label: t1-check-linearity
+#| fig-width: 8
+#| fig-height: 3.4
+
+plot(performance::check_model(model_sim, check = "linearity"))
+```
+
+### 2. Ausencia de colinealidad
+
+Los predictores no deben estar correlacionados entre sí.
+
+`inteligencia ~ sílabas por segundo + palabras por segundo + frases por segundo`
+
+> El ejemplo de Winter: queremos saber si la gente que habla más rápido parece más inteligente, y medimos la velocidad de 80 hablantes de tres maneras, en sílabas, palabras y frases por segundo. Las tres medidas dicen casi lo mismo, así que al meterlas juntas en el modelo se roban el efecto unas a otras. Aquí los datos están simulados.
+
+```{r}
+#| label: t1-assumption-collinearity
+#| echo: false
+#| fig-width: 8
+#| fig-height: 3.2
+
+set.seed(13)
+col_ok  <- tibble(x1 = rnorm(n = 80), x2 = rnorm(n = 80))
+col_bad <- tibble(x1 = rnorm(n = 80)) |> mutate(x2 = 0.95 * x1 + rnorm(n = 80, sd = 0.3))
+p_col_ok <- ggplot(data = col_ok, mapping = aes(x = x1, y = x2)) +
+  geom_point(size = 1.6, colour = "grey45") +
+  labs(x = "predictor 1", y = "predictor 2",
+       title = paste0("Cumple: r = ", round(cor(col_ok$x1, col_ok$x2), 2))) +
+  theme_sup
+p_col_bad <- ggplot(data = col_bad, mapping = aes(x = x1, y = x2)) +
+  geom_point(size = 1.6, colour = "grey45") +
+  labs(x = "sílabas por segundo", y = "palabras por segundo",
+       title = paste0("No cumple: r = ", round(cor(col_bad$x1, col_bad$x2), 2))) +
+  theme_sup
+p_col_ok | p_col_bad
+```
+
+**Verificar mediante el paquete `performance`**
+
+```{r}
+#| label: t1-vif-winter-data
+#| include: false
+
+# Tres medidas de la misma velocidad: casi la misma informacion
+set.seed(2013)
+speech <- tibble(syll_per_sec = rnorm(n = 80, mean = 5, sd = 0.8)) |>
+  mutate(words_per_sec = syll_per_sec / 1.6 + rnorm(n = 80, sd = 0.08),
+         sent_per_sec  = syll_per_sec / 12 + rnorm(n = 80, sd = 0.012),
+         intelligence  = 2 + 0.6 * syll_per_sec + rnorm(n = 80, sd = 0.8))
+
+model_speech <- lm(formula = intelligence ~ syll_per_sec + words_per_sec +
+                     sent_per_sec,
+                   data = speech)
+```
+
+```{r}
+#| label: t1-vif-winter-figure
+#| fig-width: 4
+#| fig-height: 3.4
+
+plot(performance::check_collinearity(model_speech))
+```
+
+::: {.column-margin}
+Se suele mirar con el VIF (*variance inflation factor*), que `performance::check_collinearity()` calcula para cada predictor. Un VIF por encima de 5 (o de 10, según el autor) indica un problema. Con un solo predictor, como aquí, no aplica. Si no se cumple: quedarse con una sola medida (por teoría, no por su p-valor) o reducir dimensiones (componentes principales).
+:::
+
+Los tres VIF pasan de 10, la zona roja del gráfico: las tres medidas dicen casi lo mismo. Con predictores que no se solapan, los puntos quedarían en la zona verde, cerca de 1.
+
+### 3. Homocedasticidad
+
+La **homocedasticidad** (u homogeneidad de varianzas) es que la varianza de los errores se mantiene constante en todo el rango del predictor: la dispersión de los residuos es la misma para cualquier valor de $x$, o en cualquier grupo si el predictor es categórico. Lo contrario es la heterocedasticidad.
+
+```{r}
+#| label: t1-winter-fig43
+#| echo: false
+#| fig-width: 8.5
+#| fig-height: 4.6
+
+# Las palabras de la primera seccion y su modelo
+elp_res <- palabras |> mutate(fit = fitted(model_pal), res = residuals(model_pal),
+                         lab = sprintf("%+.0f", res))
+
+# Las dos campanas condicionales: media = la recta en x = 0.5 y x = 2.5,
+# y la MISMA sigma en las dos (lo que importa aqui es la anchura, no el centro)
+sig <- sigma(model_pal)
+mu  <- predict(model_pal, newdata = tibble(log_frec = c(0.5, 2.5)))
+x0 <- 3.5; w <- 0.45          # donde empieza la campana y cuanto ocupa
+bells <- map(1:2, \(k) {
+  yy <- seq(from = mu[k] - 3 * sig, to = mu[k] + 3 * sig, length.out = 160)
+  # la campana, cerrada sobre la linea vertical x0 para que nazca de ella
+  xx <- x0 + w * exp(-0.5 * ((yy - mu[k]) / sig)^2)
+  tibble(k = k, y = c(yy[1], yy, yy[length(yy)]), x = c(x0, xx, x0))
+}) |> list_rbind()
+
+ggplot(data = elp_res, mapping = aes(x = log_frec, y = tr)) +
+  geom_segment(data = tibble(x = c(0.5, 2.5), y = mu),
+               mapping = aes(x = x, xend = x0 + w, y = y, yend = y),
+               colour = "grey65", linetype = "dashed", linewidth = 0.4) +
+  geom_segment(x = -0.1, xend = x0, y = coef(model_pal)[1] - 0.1 * coef(model_pal)[2],
+               yend = coef(model_pal)[1] + x0 * coef(model_pal)[2], linewidth = 0.8) +
+  geom_segment(mapping = aes(xend = log_frec, y = fit, yend = tr),
+               colour = "grey35", linewidth = 0.5) +
+  geom_point(size = 2.4, shape = 21, fill = "grey70") +
+  geom_text(mapping = aes(label = lab, x = log_frec + 0.05, y = tr),
+            hjust = 0, size = 2.9, colour = "grey20") +
+  annotate("point", x = 0, y = coef(model_pal)[1], shape = 22, size = 4.5, fill = "white") +
+  geom_vline(xintercept = x0, colour = "grey30", linewidth = 0.4) +
+  geom_polygon(data = bells, mapping = aes(x = x, y = y, group = k),
+               fill = "grey60", alpha = 0.45, colour = "grey20", linewidth = 0.4) +
+  # sigma como en el widget: del centro de la campana a su punto de inflexion
+  annotate("segment", x = x0, xend = x0, y = mu, yend = mu + sig,
+           colour = "firebrick", linewidth = 1.6) +
+  annotate("segment", x = x0 - 0.05, xend = x0 + 0.05, y = mu + sig, yend = mu + sig,
+           colour = "firebrick", linewidth = 0.8) +
+  annotate("segment", x = x0, xend = x0 + w * exp(-0.5), y = mu + sig, yend = mu + sig,
+           colour = "firebrick", linewidth = 0.4, linetype = "dotted") +
+  annotate("text", x = x0 + w + 0.08, y = mu + sig, hjust = 0, size = 3.4,
+           colour = "firebrick", fontface = "italic",
+           label = paste0("sigma == ", round(sig)), parse = TRUE) +
+  scale_x_continuous(breaks = 0:3, limits = c(-0.1, x0 + w + 0.5)) +
+  scale_y_continuous(limits = c(480, 960)) +
+  labs(x = "Frecuencia (log10, por mill\u00f3n)", y = "Tiempo de respuesta (ms)") +
+  theme_sup
+```
+
+**Ejemplos:**
+
+```{r}
+#| label: t1-assumption-homoscedasticity
+#| echo: false
+#| fig-width: 8.5
+#| fig-height: 7.4
+
+# 80 palabras simuladas: a la izquierda con la misma sigma en todo el rango,
+# a la derecha con una sigma que crece con x (el embudo)
+set.seed(31)
+hom_ok  <- tibble(log_frec = runif(n = 80, min = 0, max = 3.5)) |>
+  mutate(tr = 843 - 76 * log_frec + rnorm(n = 80, sd = 40))
+hom_bad <- tibble(log_frec = runif(n = 80, min = 0, max = 3.5)) |>
+  mutate(tr = 843 - 76 * log_frec + rnorm(n = 80, sd = 8 + 28 * log_frec))
+
+# Arriba: datos, recta, residuos y dos campanas con la dispersion LOCAL de los
+# residuos (los puntos a menos de 0.75 de x = 0.5 y de x = 2.5).
+# Abajo: lo mismo girado (residuos frente a ajustados), con las mismas campanas.
+panel_homo <- function(d, title) {
+  m <- lm(formula = tr ~ log_frec, data = d)
+  d <- d |> mutate(fit = fitted(m), res = residuals(m))
+  xs <- c(0.5, 2.5)
+  mu <- predict(m, newdata = tibble(log_frec = xs))
+  sds <- map_dbl(xs, \(x) sd(d$res[abs(d$log_frec - x) < 0.75]))
+  x0 <- 3.6; w <- 0.5
+  bells <- map(1:2, \(k) {
+    yy <- seq(mu[k] - 3 * sds[k], mu[k] + 3 * sds[k], length.out = 160)
+    xx <- x0 + w * exp(-0.5 * ((yy - mu[k]) / sds[k])^2)
+    tibble(k = k, y = c(yy[1], yy, yy[length(yy)]), x = c(x0, xx, x0))
+  }) |> list_rbind()
+  top <- ggplot(data = d, mapping = aes(x = log_frec, y = tr)) +
+    geom_segment(data = tibble(x = xs, y = mu),
+                 mapping = aes(x = x, xend = x0 + w, y = y, yend = y),
+                 colour = "grey65", linetype = "dashed", linewidth = 0.4) +
+    geom_segment(mapping = aes(xend = log_frec, y = fit, yend = tr),
+                 colour = "firebrick", linewidth = 0.45, alpha = 0.8) +
+    geom_abline(intercept = coef(m)[1], slope = coef(m)[2], linewidth = 0.8) +
+    geom_point(size = 1.7, colour = "grey35") +
+    geom_vline(xintercept = x0, colour = "grey30", linewidth = 0.4) +
+    geom_polygon(data = bells, mapping = aes(x = x, y = y, group = k),
+                 fill = "firebrick", alpha = 0.25, colour = "firebrick", linewidth = 0.4) +
+    annotate("text", x = x0 + w + 0.08, y = mu, hjust = 0, size = 3.1,
+             colour = "firebrick", label = paste0("sigma == ", round(sds)), parse = TRUE) +
+    scale_x_continuous(breaks = 0:3, limits = c(-0.1, x0 + w + 0.55)) +
+    scale_y_continuous(limits = c(430, 1010)) +
+    labs(x = "Frecuencia (log10, por millón)", y = "Tiempo de respuesta (ms)",
+         title = title) +
+    theme_sup
+  # girado: residuos frente a x; cada campana nace de su x, centrada en 0
+  w2 <- 0.3
+  bells_rot <- map(1:2, \(k) {
+    yy <- seq(-3 * sds[k], 3 * sds[k], length.out = 160)
+    xk <- xs[k]   # fuera de tibble(): dentro, k seria la columna recien creada
+    xx <- xk + w2 * exp(-0.5 * (yy / sds[k])^2)
+    tibble(k = k, y = c(yy[1], yy, yy[length(yy)]), x = c(xk, xx, xk))
+  }) |> list_rbind()
+  bottom <- ggplot(data = d, mapping = aes(x = log_frec, y = res)) +
+    geom_segment(mapping = aes(xend = log_frec, y = 0, yend = res),
+                 colour = "firebrick", linewidth = 0.45, alpha = 0.8) +
+    geom_hline(yintercept = 0, linewidth = 0.8) +
+    geom_point(size = 1.7, colour = "grey35") +
+    geom_polygon(data = bells_rot, mapping = aes(x = x, y = y, group = k),
+                 fill = "firebrick", alpha = 0.25, colour = "firebrick", linewidth = 0.4) +
+    scale_x_continuous(breaks = 0:3, limits = c(-0.1, x0 + w + 0.55)) +
+    scale_y_continuous(limits = c(-230, 230)) +
+    labs(x = "Frecuencia (log10, por mill\u00f3n)", y = "Residuos") +
+    theme_sup
+  list(top = top, bottom = bottom)
+}
+ok  <- panel_homo(d = hom_ok, title = "Cumple: la misma anchura en todo el rango")
+bad <- panel_homo(d = hom_bad, title = "No cumple: la dispersión crece con x")
+(ok$top | bad$top) / (ok$bottom | bad$bottom)
+```
+
+El truco de Winter para entrenar el ojo: así se ve el ruido puro. Pulsa "Otra vez" varias veces, o ejecuta el código en R.
+
+```{r}
+#| label: t1-pure-noise
+#| eval: false
+
+plot(x = rnorm(100), y = rnorm(100),
+     xlab = "Valores ajustados", ylab = "Residuos")
+abline(h = 0, lty = 2)
+```
+
+```{r}
+#| label: t1-pure-noise-widget
+#| echo: false
+#| results: asis
+
+# El mismo grafico en el navegador: cada clic genera 100 + 100 normales nuevas
+noise_html <- readLines(con = "widgets/noise_widget.html", encoding = "UTF-8", warn = FALSE)
+noise_js   <- readLines(con = "widgets/noise_widget.js", encoding = "UTF-8", warn = FALSE)
+cat("```{=html}\n", paste(noise_html, collapse = "\n"),
+    "\n<script>\n", paste(noise_js, collapse = "\n"), "\n</script>\n```\n", sep = "")
+```
+
+Si no se cumple: transformar la respuesta (logaritmo).
+
+**Verificar mediante el paquete `performance`**
+
+```{r}
+#| label: t1-check-homogeneity
+#| fig-width: 8
+#| fig-height: 3.4
+
+plot(performance::check_model(model_sim, check = "homogeneity"))
+```
+
+### 4. Normalidad de los residuos
+
+Los residuos forman una campana y, en el gráfico cuantil-cuantil, caen sobre la recta. Es el supuesto menos importante.
+
+```{r}
+#| label: t1-assumption-normality
+#| echo: false
+#| fig-width: 8
+#| fig-height: 2.9
+
+set.seed(12)
+res_ok  <- tibble(r = rnorm(n = 200))
+res_bad <- tibble(r = rexp(n = 200) - 1)
+hist_panel <- function(d, title) {
+  # la normal con la media y la desviacion tipica de los residuos, en la
+  # escala del histograma (frecuencias): densidad x n x ancho de barra
+  bw <- diff(range(d$r)) / 20
+  curva <- tibble(x = seq(min(d$r), max(d$r), length.out = 200)) |>
+    mutate(y = dnorm(x, mean = mean(d$r), sd = sd(d$r)) * nrow(d) * bw)
+  ggplot(data = d, mapping = aes(x = r)) +
+    geom_histogram(bins = 20, fill = "grey70", colour = "white") +
+    geom_line(data = curva, mapping = aes(x = x, y = y), colour = "firebrick",
+              linewidth = 0.8) +
+    labs(x = "Residuos", y = "Frecuencia", title = title) +
+    theme_sup
+}
+hist_panel(d = res_ok, title = "Cumple: sim\u00e9tricos") |
+  hist_panel(d = res_bad, title = "No cumple: asim\u00e9tricos")
+```
+
+::: {.column-margin}
+Si no se cumple: una desviación leve no importa, el modelo es robusto (Gelman y Hill, 2007; Schielzeth et al., 2020). Si es clara (asimetría fuerte, colas largas), transformar la respuesta (el logaritmo, habitual en tiempos de respuesta).
+:::
+
+```{r}
+#| label: t1-assumption-normality-qq
+#| echo: false
+#| fig-width: 8
+#| fig-height: 2.9
+
+# Los mismos residuos en el grafico Q-Q; la recta pasa por los cuartiles
+qq_panel <- function(d, title) {
+  ggplot(data = d, mapping = aes(sample = r)) +
+    stat_qq(size = 1.3, colour = "grey45") +
+    stat_qq_line(linewidth = 0.8, colour = "firebrick") +
+    labs(x = "Cuantiles te\u00f3ricos", y = "Cuantiles de los residuos", title = title) +
+    theme_sup
+}
+qq_panel(d = res_ok, title = "Gr\u00e1fico Q-Q: cumple") |
+  qq_panel(d = res_bad, title = "Gr\u00e1fico Q-Q: no cumple")
+```
+
+::: {.column-margin}
+El gráfico Q-Q (cuantil-cuantil) ordena los residuos de menor a mayor y los compara con lo que se esperaría de una normal con el mismo número de datos. Cada punto es un residuo: en horizontal, el valor que ocuparía su puesto en una normal; en vertical, el valor que tiene de verdad. Si los residuos son normales, los puntos caen sobre la recta. Si se despegan por un extremo, como a la derecha, ese lado tiene una cola más larga de lo normal.
+:::
+
+```{r}
+#| label: t1-normality-widget
+#| echo: false
+#| results: asis
+
+# El generador (HTML + JS) vive en widgets/; los tests estan portados de R
+# (normtests.js) y dan los mismos p-valores que shapiro.test() y lillie.test()
+nrw_html <- readLines(con = "widgets/normality_widget.html", encoding = "UTF-8", warn = FALSE)
+nrw_js   <- c(readLines(con = "widgets/normtests.js", encoding = "UTF-8", warn = FALSE),
+              readLines(con = "widgets/normality_widget.js", encoding = "UTF-8", warn = FALSE))
+script_at <- grep(pattern = "SCRIPT", x = nrw_html)
+nrw_html[script_at] <- paste0("<script>\n", paste(nrw_js, collapse = "\n"), "\n</script>")
+cat("```{=html}\n", paste(nrw_html, collapse = "\n"), "\n```\n", sep = "")
+```
+
+::: {.column-margin}
+Compruébalo con datos que son normales de verdad. El generador saca $n$ valores de una normal y les pasa los dos tests clásicos, Shapiro-Wilk y Kolmogorov-Smirnov. Elige $n$ y pulsa "Otra vez" varias veces: una de cada veinte muestras normales sale "no normal". Es el 5 % de falsos positivos que el test se permite, con cualquier $n$. Con $n$ pequeño, además, el histograma parece cualquier cosa.
+
+Shapiro-Wilk está en R base, `shapiro.test(x)`. Kolmogorov-Smirnov con la corrección de Lilliefors, `nortest::lillie.test(x)`, es lo que da SPSS.
+:::
+
+**Verificar mediante el paquete `performance`**
+
+```{r}
+#| label: t1-check-qq
+#| fig-width: 8
+#| fig-height: 3.4
+
+plot(performance::check_model(model_sim, check = "qq"))
+```
+
+### 5. Ausencia de puntos influyentes
+
+Ningún dato debe decidir él solo la recta. A la derecha, un único punto tira de la pendiente: la línea continua es la recta con él, la discontinua sin él.
+
+```{r}
+#| label: t1-assumption-influence
+#| echo: false
+#| fig-width: 8
+#| fig-height: 3.2
+
+set.seed(14)
+inf_ok  <- tibble(x = 1:10) |> mutate(y = 3 + 0.5 * x + rnorm(n = 10, sd = 0.5))
+inf_bad <- bind_rows(inf_ok, tibble(x = 20, y = 2))
+m_all  <- lm(formula = y ~ x, data = inf_bad)
+m_sin  <- lm(formula = y ~ x, data = inf_ok)
+p_inf_ok <- ggplot(data = inf_ok, mapping = aes(x = x, y = y)) +
+  geom_abline(intercept = coef(m_sin)[1], slope = coef(m_sin)[2], linewidth = 0.8) +
+  geom_point(size = 1.8, colour = "grey45") +
+  scale_x_continuous(limits = c(0, 21)) +
+  labs(title = "Sin un outlier aparente") +
+  theme_sup
+p_inf_bad <- ggplot(data = inf_bad, mapping = aes(x = x, y = y)) +
+  geom_abline(intercept = coef(m_sin)[1], slope = coef(m_sin)[2],
+              linewidth = 0.6, linetype = "dashed", colour = "grey40") +
+  geom_abline(intercept = coef(m_all)[1], slope = coef(m_all)[2], linewidth = 0.8) +
+  geom_point(size = 1.8, colour = "grey45") +
+  annotate("point", x = 20, y = 2, size = 3.2, shape = 21, fill = "white") +
+  annotate("text", x = 19.6, y = 3.1, label = "un solo dato", hjust = 1, size = 3.3) +
+  scale_x_continuous(limits = c(0, 21)) +
+  labs(title = "Con un outlier obvio") +
+  theme_sup
+p_inf_ok | p_inf_bad
+```
+
+Si no se cumple: analizar con y sin el dato, reportar los dos. Excluirlo solo si es un error (una edad negativa, un tono de 0 Hz).
+
+**Verificar mediante el paquete `performance`**
+
+```{r}
+#| label: t1-check-outliers
+#| fig-width: 8
+#| fig-height: 3.4
+
+plot(performance::check_model(model_sim, check = "outliers"))
+```
+
+::: {.column-margin}
+`dfbeta()` da cuánto cambia cada coeficiente si se quita cada dato. Alarma si cambia el signo de la pendiente o llega a la mitad de su valor (la regla de Winter).
+:::
+
+Con las 200 palabras simuladas no hay nada que señalar. Añadimos una palabra inventada para que sea influyente: muy frecuente (log10 = 4, fuera del rango de las demás) y muy lenta (950 ms).
+
+```{r}
+#| label: t1-outlier-data
+#| echo: false
+
+# Una palabra mas, inventada para que sea influyente: frecuencia alta y
+# tiempo de respuesta muy lento, lejos de la recta y en el borde del rango de x
+palabras_out <- palabras_sim |> add_row(log_frec = 4, tr = 950)
+model_out <- lm(formula = tr ~ log_frec, data = palabras_out)
+```
+
+```{r}
+#| label: t1-check-outliers-bad
+#| fig-width: 8
+#| fig-height: 3.4
+
+plot(performance::check_model(model_out, check = "outliers"))
+```
+
+La palabra 201 sale en rojo, fuera de la línea de Cook. Con ella la pendiente pasa de `r round(coef(model_sim)[2], 1)` a `r round(coef(model_out)[2], 1)`.
+
+### 6. Independencia
+
+Cada dato es independiente de los demás. Es el supuesto más importante y no se comprueba con un gráfico: **se decide en el diseño**. La pregunta es cuántas medidas aporta cada persona (o camada, o ítem).
+
+```{r}
+#| label: t1-assumption-independence
+#| echo: false
+#| fig-width: 8
+#| fig-height: 3.4
+
+set.seed(15)
+dis_ok  <- tibble(persona = 1:60, y = rnorm(n = 60, mean = 0, sd = 1.6))
+u_persona <- c(1.8, -1.2, 0.4, -2.3, 2.6, -0.6)  # nivel propio de cada persona
+dis_bad <- expand_grid(persona = 1:6, medida = 1:10) |>
+  mutate(y = u_persona[persona] + rnorm(n = 60, sd = 0.4))
+p_dis_ok <- ggplot(data = dis_ok, mapping = aes(x = persona, y = y)) +
+  geom_point(size = 1.6, colour = "grey45") +
+  scale_y_continuous(limits = c(-4.5, 4.5)) +
+  scale_x_continuous(breaks = c(1, 20, 40, 60)) +
+  annotate("text", x = 30, y = -4.3, label = "60 datos = 60 personas", size = 3.4) +
+  labs(x = "Persona", y = "Respuesta", title = "Cumple: una medida por persona") +
+  theme_sup
+p_dis_bad <- ggplot(data = dis_bad, mapping = aes(x = factor(persona), y = y)) +
+  geom_jitter(width = 0.15, height = 0, size = 1.6, colour = "grey45") +
+  scale_y_continuous(limits = c(-4.5, 4.5)) +
+  annotate("text", x = 3.5, y = -4.3, label = "60 datos, pero solo 6 personas", size = 3.4) +
+  labs(x = "Persona", y = "Respuesta", title = "No cumple: diez medidas por persona") +
+  theme_sup
+p_dis_ok | p_dis_bad
+```
+
+::: {.column-margin}
+A la derecha, las medidas de una misma persona se parecen entre sí: no son 60 datos independientes, son 6 personas. Tratarlas como 60 es la **pseudorreplicación** (Hurlbert, 1984; Freeberg y Lucas, 2009; Lazic, 2010; Winter, 2011).
+:::
+
+**Solución:** agregar o promediar los datos, o decirle al modelo que los datos no son independientes, que es lo que hacemos con los modelos lineales mixtos.
+
+### Todo de una vez: `check_model()`
+
+`performance::check_model()` dibuja las comprobaciones juntas y escribe en cada panel qué debería verse. La usaremos con los modelos mixtos.
+
+```{r}
+#| label: t1-check-model
+#| fig-width: 10
+#| fig-height: 9
+
+performance::check_model(model_sim)
+```
+
+Cada panel por separado se pide con `check =`, como los de los márgenes:
+
+```{r}
+#| label: t1-check-one
+#| eval: false
+
+plot(performance::check_model(model_sim, check = "linearity"), n_columns = 1)
+```
+
+El primer panel, la comprobación predictiva (`check = "pp_check"`), no está en Winter: el modelo simula datos nuevos y los compara con los nuestros. Si el modelo es razonable, se parecen. La colinealidad aparece como panel en cuanto hay dos predictores; la independencia no tiene panel, se decide en el diseño.
+
+# Referencias
+
+Freeberg, T. M., & Lucas, J. R. (2009). Pseudoreplication is (still) a problem. *Journal of Comparative Psychology, 123*(4), 450–451. <https://doi.org/10.1037/a0017031>
+
+Gelman, A., & Hill, J. (2007). *Data analysis using regression and multilevel/hierarchical models*. Cambridge University Press.
+
+Hurlbert, S. H. (1984). Pseudoreplication and the design of ecological field experiments. *Ecological Monographs, 54*(2), 187–211. <https://doi.org/10.2307/1942661>
+
+Lazic, S. E. (2010). The problem of pseudoreplication in neuroscientific studies: Is it affecting your analysis? *BMC Neuroscience, 11*, 5. <https://doi.org/10.1186/1471-2202-11-5>
+
+Schielzeth, H., Dingemanse, N. J., Nakagawa, S., Westneat, D. F., Allegue, H., Teplitsky, C., Réale, D., Dochtermann, N. A., Garamszegi, L. Z., & Araya-Ajoy, Y. G. (2020). Robustness of linear mixed-effects models to violations of distributional assumptions. *Methods in Ecology and Evolution, 11*(9), 1141–1152. <https://doi.org/10.1111/2041-210X.13434>
+
+Winter, B. (2011). Pseudoreplication in phonetic research. In *Proceedings of the 17th International Congress of Phonetic Sciences* (pp. 2137–2140). Hong Kong.
+
+Winter, B. (2013). *Linear models and linear mixed effects models in R with linguistic applications*. arXiv:1308.5499. <https://arxiv.org/abs/1308.5499>
+
+Winter, B. (2019). *Statistics for linguists: An introduction using R*. Routledge. <https://doi.org/10.4324/9781315165547>.
+
+# Session information
+
+```{r}
+#| label: session-info
+#| code-fold: true
+
+sessionInfo()
+```

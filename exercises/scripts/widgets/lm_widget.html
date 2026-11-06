@@ -1,0 +1,32 @@
+<div id="lm-widget" class="lmw">
+  <div class="lmw-controls">
+    <label>&alpha; (intercepto): <b id="lmw-b0"></b><br>
+      <input id="lmw-s0" type="range"></label>
+    <label>&beta; (pendiente): <b id="lmw-b1"></b><br>
+      <input id="lmw-s1" type="range"></label>
+    <div class="lmw-readout">Suma de cuadrados de los residuos: <b id="lmw-sse"></b><br>
+      <button id="lmw-fit" type="button">Recta de lm()</button>
+      <button id="lmw-reset" type="button">Reiniciar</button></div>
+  </div>
+  <svg id="lmw-svg1" viewBox="0 0 620 380" style="width:100%; height:auto; font-family:inherit;"></svg>
+</div>
+<!-- SPLIT: el documento parte el widget aqui para poner el texto de la vista girada al margen -->
+<div class="lmw">
+  <svg id="lmw-svg2" viewBox="0 0 620 320" style="width:100%; height:auto; font-family:inherit;"></svg>
+  <style>
+    .lmw { margin: 0.8em 0 1.2em 0; }
+    .lmw-controls { display: flex; gap: 1.6em; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.6em; }
+    .lmw input[type=range] { width: 220px; display: block; margin-top: 0.2em; }
+    .lmw button { margin-top: 0.45em; margin-right: 0.4em; }
+    /* botones en la misma escala de grises que las figuras; el de lm() relleno */
+    .lmw button { font: inherit; font-size: 0.9em; padding: 0.3em 0.95em; border: 1px solid #bdbdbd;
+      border-radius: 6px; background: #fff; color: #262626; cursor: pointer;
+      transition: background-color 0.15s, border-color 0.15s; }
+    .lmw button:hover { background: #f2f2f2; border-color: #737373; }
+    .lmw button:active { background: #e6e6e6; }
+    .lmw button:focus-visible { outline: 2px solid #737373; outline-offset: 2px; }
+    .lmw #lmw-fit { background: #262626; color: #fff; border-color: #262626; }
+    .lmw #lmw-fit:hover { background: #000; border-color: #000; }
+  </style>
+  <!-- SCRIPT: aqui el documento inserta los datos y lm_widget.js -->
+</div>

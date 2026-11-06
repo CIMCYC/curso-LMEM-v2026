@@ -1,0 +1,32 @@
+<div id="normality-widget" class="nrw">
+  <div class="nrw-controls">
+    <label>n (tama&ntilde;o de la muestra): <b id="nrw-nlab"></b><br>
+      <input id="nrw-n" type="range" min="0" max="9" step="1" value="3"></label>
+    <div class="nrw-readout">
+      <button id="nrw-again" type="button">Otra vez</button>
+      <button id="nrw-reset" type="button">Reiniciar contador</button></div>
+  </div>
+  <svg id="nrw-svg" viewBox="0 0 620 300" style="width:100%; height:auto; font-family:inherit;"></svg>
+  <p class="nrw-text">Shapiro-Wilk: <i>W</i> = <b id="nrw-w"></b>, <i>p</i> = <b id="nrw-pw"></b>.<br>
+    Kolmogorov-Smirnov (Lilliefors): <i>D</i> = <b id="nrw-d"></b>, <i>p</i> = <b id="nrw-pd"></b>.</p>
+  <p class="nrw-text">Muestras normales generadas con este <i>n</i>: <b id="nrw-m"></b>.
+    Declaradas &laquo;no normales&raquo; (<i>p</i> &lt; 0.05): Shapiro-Wilk <b id="nrw-k1"></b> (<b id="nrw-r1"></b>),
+    Kolmogorov-Smirnov <b id="nrw-k2"></b> (<b id="nrw-r2"></b>).</p>
+  <style>
+    .nrw { margin: 0.8em 0 1.2em 0; }
+    .nrw-controls { display: flex; gap: 1.6em; flex-wrap: wrap; align-items: flex-end; margin-bottom: 0.6em; }
+    .nrw input[type=range] { width: 220px; display: block; margin-top: 0.2em; }
+    .nrw button { margin-top: 0.45em; margin-right: 0.4em; }
+    .nrw button { font: inherit; font-size: 0.9em; padding: 0.3em 0.95em; border: 1px solid #bdbdbd;
+      border-radius: 6px; background: #fff; color: #262626; cursor: pointer;
+      transition: background-color 0.15s, border-color 0.15s; }
+    .nrw button:hover { background: #f2f2f2; border-color: #737373; }
+    .nrw button:active { background: #e6e6e6; }
+    .nrw button:focus-visible { outline: 2px solid #737373; outline-offset: 2px; }
+    .nrw #nrw-again { background: #262626; color: #fff; border-color: #262626; }
+    .nrw #nrw-again:hover { background: #000; border-color: #000; }
+    .nrw-text { margin: 0.6em 0 0.3em 0; }
+    .nrw .nrw-sig { color: #C0392B; }
+  </style>
+  <!-- SCRIPT: aqui el documento inserta normtests.js y normality_widget.js -->
+</div>

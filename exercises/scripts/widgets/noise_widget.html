@@ -1,0 +1,17 @@
+<div id="noise-widget" class="nzw">
+  <button id="nzw-again" type="button">Otra vez</button>
+  <span class="nzw-count">Nube n&uacute;mero <b id="nzw-n">1</b></span>
+  <svg id="nzw-svg" viewBox="0 0 560 360" style="width:100%; max-width:560px; height:auto; display:block; font-family:inherit;"></svg>
+</div>
+<style>
+  .nzw { margin: 0.6em 0 1.2em 0; }
+  .nzw button { margin-right: 0.8em; }
+  /* mismo estilo de boton que el widget de la recta */
+  .nzw button { font: inherit; font-size: 0.9em; padding: 0.3em 0.95em; border: 1px solid #bdbdbd;
+    border-radius: 6px; background: #fff; color: #262626; cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s; }
+  .nzw button:hover { background: #f2f2f2; border-color: #737373; }
+  .nzw button:active { background: #e6e6e6; }
+  .nzw button:focus-visible { outline: 2px solid #737373; outline-offset: 2px; }
+  .nzw-count { color: #555; }
+</style>
