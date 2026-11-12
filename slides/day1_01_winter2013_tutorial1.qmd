@@ -1,6 +1,7 @@
 ---
-title: "Winter (2013), Tutorial 1: el modelo lineal"
-subtitle: "Reproducción paso a paso"
+title: "Introducción a modelos lineales"
+abstract: |
+  Qué es un modelo lineal: intercepto, pendiente y error, con un widget para buscar los parámetros a mano. Dos ejemplos de Winter: el tono de voz en función del sexo (cómo codifica R una variable categórica) y de la edad (centrar el predictor), y la notación para más de un predictor (efectos principales e interacciones). Por último, los supuestos del modelo lineal, uno a uno, y cómo comprobarlos con `performance::check_model()`.
 author: "Filip Andras — CIMCYC, Universidad de Granada"
 date: today
 date-format: "D MMMM YYYY"
@@ -111,7 +112,11 @@ y = \beta_0 + \beta_1 \cdot x + \varepsilon
 $$
 :::
 
-En R el mismo modelo se escribe `y ~ x`: la virgulilla se lee "en función de", y R añade por su cuenta $\alpha$ y $\varepsilon$.
+En R el mismo modelo se escribe así:
+
+`y ~ x`
+
+La virgulilla se lee "en función de", y R añade por su cuenta $\alpha$ y $\varepsilon$.
 
 **Ejemplo:**
 
@@ -127,14 +132,14 @@ palabras <- tibble(
   palabra = c("tiempo", "casa", "agua", "mesa", "perro", "nube",
               "lámpara", "cebolla", "efímero", "albornoz", "zozobra", "alféizar"),
   frecuencia = c(1200, 900, 600, 150, 120, 40, 20, 10, 5, 3, 2, 1.2),  # por millon
-  tr = c(629, 584, 638, 636, 719, 702, 791, 720, 854, 777, 846, 799)     # ms
+  RT = c(629, 584, 638, 636, 719, 702, 791, 720, 854, 777, 846, 799)     # ms
 ) |>
   mutate(log_frec = log10(frecuencia))
 
 red <- "#C0392B"  # el rojo de las anotaciones
 
 # La recta que ajusta lm(); alpha y beta salen de coef()
-model_pal <- lm(formula = tr ~ log_frec, data = palabras)
+model_pal <- lm(formula = RT ~ log_frec, data = palabras)
 b0 <- coef(model_pal)[1]
 b1 <- coef(model_pal)[2]
 
@@ -142,7 +147,7 @@ b1 <- coef(model_pal)[2]
 punto <- palabras[7, ] |> mutate(y_recta = b0 + b1 * log_frec)
 
 # Panel (a): solo los datos, con todas las palabras
-p_datos <- ggplot(data = palabras, mapping = aes(x = log_frec, y = tr)) +
+p_datos <- ggplot(data = palabras, mapping = aes(x = log_frec, y = RT)) +
   geom_point(size = 2.4, colour = "grey45") +
   ggrepel::geom_text_repel(mapping = aes(label = palabra), size = 3, colour = "grey25",
                            seed = 1, box.padding = 0.3, min.segment.length = Inf) +
@@ -153,7 +158,7 @@ p_datos <- ggplot(data = palabras, mapping = aes(x = log_frec, y = tr)) +
   theme_classic(base_size = 11)
 
 # Panel (b): la recta de lm() y sus piezas
-p_modelo <- ggplot(data = palabras, mapping = aes(x = log_frec, y = tr)) +
+p_modelo <- ggplot(data = palabras, mapping = aes(x = log_frec, y = RT)) +
   geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
   geom_abline(intercept = b0, slope = b1, linewidth = 0.8) +
   geom_point(size = 2.4, colour = "grey45") +
@@ -162,7 +167,7 @@ p_modelo <- ggplot(data = palabras, mapping = aes(x = log_frec, y = tr)) +
            colour = "grey25", linewidth = 0.8) +
   annotate("segment", x = 3, xend = 3, y = b0 + b1 * 2, yend = b0 + b1 * 3,
            colour = "grey25", linewidth = 0.8) +
-  annotate("segment", x = punto$log_frec, xend = punto$log_frec, y = punto$y_recta, yend = punto$tr,
+  annotate("segment", x = punto$log_frec, xend = punto$log_frec, y = punto$y_recta, yend = punto$RT,
            colour = "grey25", linewidth = 0.8, linetype = "dotted") +
   scale_x_continuous(breaks = 0:3, limits = c(-0.15, 3.4)) +
   scale_y_continuous(limits = c(490, 920)) +
@@ -205,7 +210,7 @@ widget_html <- readLines(con = "widgets/lm_widget.html", encoding = "UTF-8", war
 widget_js   <- readLines(con = "widgets/lm_widget.js", encoding = "UTF-8", warn = FALSE)
 widget_data <- paste0(
   "window.LMW = {xs: [", paste(signif(palabras$log_frec, 12), collapse = ", "),
-  "], ys: [", paste(palabras$tr, collapse = ", "),
+  "], ys: [", paste(palabras$RT, collapse = ", "),
   "], fit: [", signif(coef(model_pal)[1], 12), ", ", signif(coef(model_pal)[2], 12), "],",
   " xr: {min: -0.2, max: 3.4}, xticks: [0, 1, 2, 3],",
   " yr: {min: 500, max: 950}, yticks: [500, 600, 700, 800, 900],",
@@ -267,7 +272,13 @@ $\sigma$ es la **desviación típica del error**: cuánto se apartan los puntos 
 >
 > Resumido de Winter (2013, pp. 1-2).
 
-Winter lo escribe como `pitch ~ sex + ε`: el tono "en función de" el sexo, más ruido. Aquí el predictor no es un número sino una categoría con dos niveles, `female` y `male`. En la figura del margen, cada grupo es una columna de puntos, el guion gris es su media y la recta une las dos medias. La "línea más ruido" sigue siendo la misma idea: la recta es el modelo, y el ruido es lo que cada persona se aparta de la media de su grupo.
+![](images/tutorial1_voice_pitch.jpg){fig-alt="Dibujo: de una población de hablantes se toma una muestra, se graba su voz y se comparan las distribuciones del tono de dos grupos." width=600 fig-align="center"}
+
+Winter lo escribe así:
+
+`pitch ~ sex + ε`
+
+El tono "en función de" el sexo, más ruido. Aquí el predictor no es un número sino una categoría con dos niveles, `female` y `male`. En la figura del margen, cada grupo es una columna de puntos, el guion gris es su media y la recta une las dos medias. La "línea más ruido" sigue siendo la misma idea: la recta es el modelo, y el ruido es lo que cada persona se aparta de la media de su grupo.
 
 Seis datos inventados por Winter: el tono de voz (Hz) de tres mujeres y tres hombres.
 
@@ -549,9 +560,33 @@ El 0 queda en medio de los dos grupos, y `(Intercept)` es la media de las dos me
 La codificación decide dónde está el 0, y el intercepto es siempre el valor de la recta en ese 0. Por eso cambia de una codificación a otra: media de las mujeres, media de los hombres, media de las dos medias. El tamaño de la diferencia entre los grupos es el mismo en las tres codificaciones, y las predicciones del modelo también.
 :::
 
+### Cómo redactarlo
+
+```{r}
+#| label: t1-sex-report
+#| include: false
+
+# Los numeros del parrafo, sacados del modelo para no copiarlos a mano
+sex_summary <- summary(model_sex)
+sex_f <- sex_summary$fstatistic
+sex_p_model <- pf(q = sex_f[["value"]], df1 = sex_f[["numdf"]],
+                  df2 = sex_f[["dendf"]], lower.tail = FALSE)
+sex_coefs <- coef(sex_summary)
+# Formato APA: p y R2 sin el cero inicial; signo menos tipografico
+apa_p <- function(p) sub("^0", "", sprintf("%.3f", p))
+apa_r <- function(r) sub("^0", "", sprintf("%.2f", r))
+num_fmt <- function(x, d) sub("-", "\u2212", sprintf(paste0("%.", d, "f"), x))
+```
+
+> Ajustamos un modelo lineal con el tono de voz (Hz) como variable dependiente y el sexo como predictor (referencia: mujeres). El modelo fue significativo, *F*(`r sex_f[["numdf"]]`, `r sex_f[["dendf"]]`) = `r sprintf("%.2f", sex_f[["value"]])`, *p* = `r apa_p(sex_p_model)`, y explicó el `r round(100 * sex_summary$r.squared)` % de la varianza del tono (*R*² = `r apa_r(sex_summary$r.squared)`, *R*² ajustado = `r apa_r(sex_summary$adj.r.squared)`; error típico residual = `r sprintf("%.1f", sigma(model_sex))` Hz). El tono medio de las mujeres fue de `r sprintf("%.1f", sex_coefs["(Intercept)", "Estimate"])` Hz (EE = `r sprintf("%.1f", sex_coefs["(Intercept)", "Std. Error"])`). Los hombres tuvieron un tono `r sprintf("%.1f", abs(sex_coefs["sexmale", "Estimate"]))` Hz más grave (*b* = `r num_fmt(sex_coefs["sexmale", "Estimate"], 2)`, EE = `r sprintf("%.2f", sex_coefs["sexmale", "Std. Error"])`, *t*(`r sex_f[["dendf"]]`) = `r num_fmt(sex_coefs["sexmale", "t value"], 2)`, *p* = `r apa_p(sex_coefs["sexmale", "Pr(>|t|)"])`), es decir, `r sprintf("%.1f", sum(sex_coefs[, "Estimate"]))` Hz de media.
+
 ## Tono de voz en función de la edad
 
-Winter lo escribe como `pitch ~ age + ε`. Ahora el predictor es un número, la edad en años. En la figura del margen, cada punto es una persona y la recta es el modelo.
+Winter lo escribe así:
+
+`pitch ~ age + ε`
+
+Ahora el predictor es un número, la edad en años. En la figura del margen, cada punto es una persona y la recta es el modelo.
 
 Otros seis datos inventados: el tono de voz de seis personas de distinta edad.
 
@@ -750,6 +785,24 @@ ggplot(data = pitch_age, mapping = aes(x = age_c, y = pitch)) +
 Centrar no cambia la recta ni la pendiente: solo mueve el 0 del eje x. Con la edad en años, el intercepto es el tono a los 0 años, fuera de los datos. Con la edad centrada, es el tono a la edad media, en mitad de los datos.
 :::
 
+## Más de un predictor: efectos principales e interacciones
+
+Los dos predictores en el mismo modelo. Cada uno tiene su propia pendiente, su **efecto principal** (*main effect*): el efecto del sexo controlando la edad, y el de la edad controlando el sexo.
+
+`pitch ~ sex + age + ε`
+
+Hay **interacción** (*interaction*) cuando el efecto de un predictor cambia según el valor del otro. En R, la interacción sola se escribe con dos puntos:
+
+`pitch ~ sex + age + sex:age + ε`
+
+> Por ejemplo, que con la edad el tono baje más en los hombres que en las mujeres: la pendiente de la edad sería distinta para cada sexo.
+
+El asterisco lo escribe todo de una vez, los efectos principales y la interacción:
+
+`pitch ~ sex * age + ε`
+
+Con tres predictores, `A * B * C` incluye los tres efectos principales, las tres interacciones dobles y la triple.
+
 ## Supuestos del modelo lineal
 
 ```{r}
@@ -767,11 +820,11 @@ palabras_sim <- tibble(
 ) |>
   mutate(
     # la recta (alpha + beta * x) mas el error (normal, sigma = 40)
-    tr = 843 - 76 * log_frec + rnorm(n = 200, mean = 0, sd = 40)
+    RT = 843 - 76 * log_frec + rnorm(n = 200, mean = 0, sd = 40)
   )
 
 # El modelo sobre las 200 palabras: coef() recupera alpha y beta
-model_sim <- lm(formula = tr ~ log_frec, data = palabras_sim)
+model_sim <- lm(formula = RT ~ log_frec, data = palabras_sim)
 coef(model_sim)
 ```
 
@@ -846,10 +899,12 @@ bad <- fit_panels(d = lin_bad, title = "No cumple: una curva")
 (ok$top | bad$top) / (ok$bottom | bad$bottom)
 ```
 
-Si no se cumple: añadir el predictor que falta, transformar la respuesta (logaritmo) o añadir $x^2$.
-
 ::: {.callout-note}
-"Lineal" se refiere a la **combinación lineal** de los predictores: la media de $y$ es una suma de términos, cada uno un predictor multiplicado por su coeficiente, como en $\alpha + \beta_1 x_1 + \beta_2 x_2$. Lo que tiene que ser lineal son los coeficientes, no los predictores. Por eso `y ~ x + I(x^2)` sigue siendo un modelo lineal aunque la curva ajustada sea una parábola: es $\alpha + \beta_1 x + \beta_2 x^2$, y cada coeficiente multiplica a su término y se suma. La recta ajustada no siempre tiene que ser una recta.
+"Lineal" se refiere a la **combinación lineal** de los predictores: la media de $y$ es una suma de términos, cada uno un predictor multiplicado por su coeficiente, como en $\alpha + \beta_1 x_1 + \beta_2 x_2$. Lo que tiene que ser lineal son los coeficientes, no los predictores. Por eso este modelo sigue siendo lineal aunque la curva ajustada sea una parábola:
+
+`y ~ x + I(x^2)`
+
+Es $\alpha + \beta_1 x + \beta_2 x^2$, y cada coeficiente multiplica a su término y se suma. La recta ajustada no siempre tiene que ser una recta.
 :::
 
 **Verificar mediante el paquete `performance`**
@@ -861,6 +916,10 @@ Si no se cumple: añadir el predictor que falta, transformar la respuesta (logar
 
 plot(performance::check_model(model_sim, check = "linearity"))
 ```
+
+::: {.callout-note title="Solución"}
+Añadir el predictor que falta, transformar la respuesta (logaritmo) o añadir $x^2$.
+:::
 
 ### 2. Ausencia de colinealidad
 
@@ -919,10 +978,14 @@ plot(performance::check_collinearity(model_speech))
 ```
 
 ::: {.column-margin}
-Se suele mirar con el VIF (*variance inflation factor*), que `performance::check_collinearity()` calcula para cada predictor. Un VIF por encima de 5 (o de 10, según el autor) indica un problema. Con un solo predictor, como aquí, no aplica. Si no se cumple: quedarse con una sola medida (por teoría, no por su p-valor) o reducir dimensiones (componentes principales).
+Se suele mirar con el VIF (*variance inflation factor*), que `performance::check_collinearity()` calcula para cada predictor. Un VIF por encima de 5 (o de 10, según el autor) indica un problema. Con un solo predictor, como aquí, no aplica.
 :::
 
 Los tres VIF pasan de 10, la zona roja del gráfico: las tres medidas dicen casi lo mismo. Con predictores que no se solapan, los puntos quedarían en la zona verde, cerca de 1.
+
+::: {.callout-note title="Solución"}
+Quedarse con una sola medida (por teoría, no por su p-valor) o reducir dimensiones (componentes principales).
+:::
 
 ### 3. Homocedasticidad
 
@@ -950,16 +1013,16 @@ bells <- map(1:2, \(k) {
   tibble(k = k, y = c(yy[1], yy, yy[length(yy)]), x = c(x0, xx, x0))
 }) |> list_rbind()
 
-ggplot(data = elp_res, mapping = aes(x = log_frec, y = tr)) +
+ggplot(data = elp_res, mapping = aes(x = log_frec, y = RT)) +
   geom_segment(data = tibble(x = c(0.5, 2.5), y = mu),
                mapping = aes(x = x, xend = x0 + w, y = y, yend = y),
                colour = "grey65", linetype = "dashed", linewidth = 0.4) +
   geom_segment(x = -0.1, xend = x0, y = coef(model_pal)[1] - 0.1 * coef(model_pal)[2],
                yend = coef(model_pal)[1] + x0 * coef(model_pal)[2], linewidth = 0.8) +
-  geom_segment(mapping = aes(xend = log_frec, y = fit, yend = tr),
+  geom_segment(mapping = aes(xend = log_frec, y = fit, yend = RT),
                colour = "grey35", linewidth = 0.5) +
   geom_point(size = 2.4, shape = 21, fill = "grey70") +
-  geom_text(mapping = aes(label = lab, x = log_frec + 0.05, y = tr),
+  geom_text(mapping = aes(label = lab, x = log_frec + 0.05, y = RT),
             hjust = 0, size = 2.9, colour = "grey20") +
   annotate("point", x = 0, y = coef(model_pal)[1], shape = 22, size = 4.5, fill = "white") +
   geom_vline(xintercept = x0, colour = "grey30", linewidth = 0.4) +
@@ -993,15 +1056,15 @@ ggplot(data = elp_res, mapping = aes(x = log_frec, y = tr)) +
 # a la derecha con una sigma que crece con x (el embudo)
 set.seed(31)
 hom_ok  <- tibble(log_frec = runif(n = 80, min = 0, max = 3.5)) |>
-  mutate(tr = 843 - 76 * log_frec + rnorm(n = 80, sd = 40))
+  mutate(RT = 843 - 76 * log_frec + rnorm(n = 80, sd = 40))
 hom_bad <- tibble(log_frec = runif(n = 80, min = 0, max = 3.5)) |>
-  mutate(tr = 843 - 76 * log_frec + rnorm(n = 80, sd = 8 + 28 * log_frec))
+  mutate(RT = 843 - 76 * log_frec + rnorm(n = 80, sd = 8 + 28 * log_frec))
 
 # Arriba: datos, recta, residuos y dos campanas con la dispersion LOCAL de los
 # residuos (los puntos a menos de 0.75 de x = 0.5 y de x = 2.5).
 # Abajo: lo mismo girado (residuos frente a ajustados), con las mismas campanas.
 panel_homo <- function(d, title) {
-  m <- lm(formula = tr ~ log_frec, data = d)
+  m <- lm(formula = RT ~ log_frec, data = d)
   d <- d |> mutate(fit = fitted(m), res = residuals(m))
   xs <- c(0.5, 2.5)
   mu <- predict(m, newdata = tibble(log_frec = xs))
@@ -1012,11 +1075,11 @@ panel_homo <- function(d, title) {
     xx <- x0 + w * exp(-0.5 * ((yy - mu[k]) / sds[k])^2)
     tibble(k = k, y = c(yy[1], yy, yy[length(yy)]), x = c(x0, xx, x0))
   }) |> list_rbind()
-  top <- ggplot(data = d, mapping = aes(x = log_frec, y = tr)) +
+  top <- ggplot(data = d, mapping = aes(x = log_frec, y = RT)) +
     geom_segment(data = tibble(x = xs, y = mu),
                  mapping = aes(x = x, xend = x0 + w, y = y, yend = y),
                  colour = "grey65", linetype = "dashed", linewidth = 0.4) +
-    geom_segment(mapping = aes(xend = log_frec, y = fit, yend = tr),
+    geom_segment(mapping = aes(xend = log_frec, y = fit, yend = RT),
                  colour = "firebrick", linewidth = 0.45, alpha = 0.8) +
     geom_abline(intercept = coef(m)[1], slope = coef(m)[2], linewidth = 0.8) +
     geom_point(size = 1.7, colour = "grey35") +
@@ -1079,8 +1142,6 @@ cat("```{=html}\n", paste(noise_html, collapse = "\n"),
     "\n<script>\n", paste(noise_js, collapse = "\n"), "\n</script>\n```\n", sep = "")
 ```
 
-Si no se cumple: transformar la respuesta (logaritmo).
-
 **Verificar mediante el paquete `performance`**
 
 ```{r}
@@ -1090,6 +1151,10 @@ Si no se cumple: transformar la respuesta (logaritmo).
 
 plot(performance::check_model(model_sim, check = "homogeneity"))
 ```
+
+::: {.callout-note title="Solución"}
+Transformar la respuesta (logaritmo).
+:::
 
 ### 4. Normalidad de los residuos
 
@@ -1120,10 +1185,6 @@ hist_panel <- function(d, title) {
 hist_panel(d = res_ok, title = "Cumple: sim\u00e9tricos") |
   hist_panel(d = res_bad, title = "No cumple: asim\u00e9tricos")
 ```
-
-::: {.column-margin}
-Si no se cumple: una desviación leve no importa, el modelo es robusto (Gelman y Hill, 2007; Schielzeth et al., 2020). Si es clara (asimetría fuerte, colas largas), transformar la respuesta (el logaritmo, habitual en tiempos de respuesta).
-:::
 
 ```{r}
 #| label: t1-assumption-normality-qq
@@ -1178,6 +1239,10 @@ Shapiro-Wilk está en R base, `shapiro.test(x)`. Kolmogorov-Smirnov con la corre
 plot(performance::check_model(model_sim, check = "qq"))
 ```
 
+::: {.callout-note title="Solución"}
+Una desviación leve no importa, el modelo es robusto (Gelman y Hill, 2007; Schielzeth et al., 2020). Si es clara (asimetría fuerte, colas largas), transformar la respuesta (el logaritmo, habitual en tiempos de respuesta).
+:::
+
 ### 5. Ausencia de puntos influyentes
 
 Ningún dato debe decidir él solo la recta. A la derecha, un único punto tira de la pendiente: la línea continua es la recta con él, la discontinua sin él.
@@ -1212,8 +1277,6 @@ p_inf_bad <- ggplot(data = inf_bad, mapping = aes(x = x, y = y)) +
 p_inf_ok | p_inf_bad
 ```
 
-Si no se cumple: analizar con y sin el dato, reportar los dos. Excluirlo solo si es un error (una edad negativa, un tono de 0 Hz).
-
 **Verificar mediante el paquete `performance`**
 
 ```{r}
@@ -1236,8 +1299,8 @@ Con las 200 palabras simuladas no hay nada que señalar. Añadimos una palabra i
 
 # Una palabra mas, inventada para que sea influyente: frecuencia alta y
 # tiempo de respuesta muy lento, lejos de la recta y en el borde del rango de x
-palabras_out <- palabras_sim |> add_row(log_frec = 4, tr = 950)
-model_out <- lm(formula = tr ~ log_frec, data = palabras_out)
+palabras_out <- palabras_sim |> add_row(log_frec = 4, RT = 950)
+model_out <- lm(formula = RT ~ log_frec, data = palabras_out)
 ```
 
 ```{r}
@@ -1249,6 +1312,10 @@ plot(performance::check_model(model_out, check = "outliers"))
 ```
 
 La palabra 201 sale en rojo, fuera de la línea de Cook. Con ella la pendiente pasa de `r round(coef(model_sim)[2], 1)` a `r round(coef(model_out)[2], 1)`.
+
+::: {.callout-note title="Solución"}
+Analizar con y sin el dato, reportar los dos. Excluirlo solo si es un error (una edad negativa, un tono de 0 Hz).
+:::
 
 ### 6. Independencia
 
@@ -1285,7 +1352,9 @@ p_dis_ok | p_dis_bad
 A la derecha, las medidas de una misma persona se parecen entre sí: no son 60 datos independientes, son 6 personas. Tratarlas como 60 es la **pseudorreplicación** (Hurlbert, 1984; Freeberg y Lucas, 2009; Lazic, 2010; Winter, 2011).
 :::
 
-**Solución:** agregar o promediar los datos, o decirle al modelo que los datos no son independientes, que es lo que hacemos con los modelos lineales mixtos.
+::: {.callout-note title="Solución"}
+Agregar o promediar los datos, o decirle al modelo que los datos no son independientes, que es lo que hacemos con los modelos lineales mixtos.
+:::
 
 ### Todo de una vez: `check_model()`
 
@@ -1299,16 +1368,9 @@ A la derecha, las medidas de una misma persona se parecen entre sí: no son 60 d
 performance::check_model(model_sim)
 ```
 
-Cada panel por separado se pide con `check =`, como los de los márgenes:
-
-```{r}
-#| label: t1-check-one
-#| eval: false
-
-plot(performance::check_model(model_sim, check = "linearity"), n_columns = 1)
-```
-
+::: {.column-margin}
 El primer panel, la comprobación predictiva (`check = "pp_check"`), no está en Winter: el modelo simula datos nuevos y los compara con los nuestros. Si el modelo es razonable, se parecen. La colinealidad aparece como panel en cuanto hay dos predictores; la independencia no tiene panel, se decide en el diseño.
+:::
 
 # Referencias
 
@@ -1325,8 +1387,6 @@ Schielzeth, H., Dingemanse, N. J., Nakagawa, S., Westneat, D. F., Allegue, H., T
 Winter, B. (2011). Pseudoreplication in phonetic research. In *Proceedings of the 17th International Congress of Phonetic Sciences* (pp. 2137–2140). Hong Kong.
 
 Winter, B. (2013). *Linear models and linear mixed effects models in R with linguistic applications*. arXiv:1308.5499. <https://arxiv.org/abs/1308.5499>
-
-Winter, B. (2019). *Statistics for linguists: An introduction using R*. Routledge. <https://doi.org/10.4324/9781315165547>.
 
 # Session information
 

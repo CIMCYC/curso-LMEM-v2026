@@ -10,6 +10,9 @@
 output/
 __pycache__/
 
+# --- Office lock files (created while a document is open) ---
+~$*
+
 # --- never published: course administration (enrolment lists, emails,
 # certificates, attendance) and anything with participant data ---
 /admin/
@@ -26,5 +29,21 @@ HANDOFF*.md
 reading_plan_lmem_*.xlsx
 create_reading_plan.py
 
-# --- rendered tutorials (15 MB each, embed-resources): render locally ---
+# --- slides: the PowerPoint stays local (48 MB); its PDF and the rendered
+# tutorials (.html, next to their .qmd) are published ---
+slides/*.pptx
+
+# --- rendered exercise documents: render locally ---
 exercises/scripts/*.html
+
+# --- solutions: published after the class ---
+*_solved.*
+
+# --- participant-level data from the lexical decision task: local only ---
+exercises/data/raw_data/jatos_results_*.txt
+exercises/data/processed_data/
+
+# --- data that the scripts download themselves (Brown, 2021, from OSF) ---
+exercises/data/raw_data/rt_dummy_data.csv
+exercises/data/raw_data/rt_dummy_data_interaction.csv
+exercises/data/raw_data/acc_dummy_data.csv
