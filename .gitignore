@@ -36,11 +36,10 @@ slides/*.pptx
 # --- rendered exercise documents: render locally ---
 exercises/scripts/*.html
 
-# --- solutions: published after the class ---
-*_solved.*
-
-# --- participant-level data from the lexical decision task: local only ---
+# --- lexical decision task: only the export of the class of 13 Nov 2026 is
+# published; the pilot and the processed data stay local ---
 exercises/data/raw_data/jatos_results_*.txt
+!exercises/data/raw_data/jatos_results_20261113134704.txt
 exercises/data/processed_data/
 
 # --- data that the scripts download themselves (Brown, 2021, from OSF) ---

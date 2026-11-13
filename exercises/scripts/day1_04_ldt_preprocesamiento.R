@@ -35,11 +35,13 @@ if (length(candidates) == 0) {
 jatos_file <- candidates[which.max(file.mtime(candidates))]
 print(paste("Archivo de JATOS:", basename(jatos_file)))
 
-# Cada linea completa es un objeto JSON {"data": [...ensayos...],
-# "context": {...}}. Las sesiones que no se terminaron dejan lineas sueltas
-# como "[" o un "data" vacio: se descartan.
+# Cada sesion completa es una linea con un objeto JSON {"data":
+# [...ensayos...], "context": {...}}. Las sesiones que no se terminaron
+# dejan lineas sueltas (un "[", o sus ensayos de practica, uno por linea)
+# o un "data" vacio: se descartan. Solo se leen las lineas que empiezan
+# por {"data".
 raw_lines <- read_lines(jatos_file)
-json_lines <- raw_lines[str_starts(raw_lines, fixed("{"))]
+json_lines <- raw_lines[str_starts(raw_lines, fixed("{\"data\""))]
 
 sessions <- map(json_lines, \(line) fromJSON(line, simplifyVector = TRUE))
 sessions <- keep(sessions, \(s) is.data.frame(s$data) && nrow(s$data) > 0)

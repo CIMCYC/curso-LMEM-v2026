@@ -1,0 +1,287 @@
+---
+title: "Tarea de decisión léxica: análisis (versión resuelta)"
+abstract: |
+  El efecto de la frecuencia de la palabra en el tiempo de respuesta de la tarea de decisión léxica, con un modelo lineal mixto sobre todos los ensayos: conocer y visualizar los datos, codificar la frecuencia, interceptos variables por participante y por palabra, test de razón de verosimilitudes, pendientes variables y supuestos.
+author: "Filip Andras — CIMCYC, Universidad de Granada"
+date: today
+date-format: "D MMMM YYYY"
+lang: es
+format:
+  html:
+    theme: cosmo
+    toc: true
+    toc-location: left
+    toc-depth: 2
+    embed-resources: true
+    code-fold: false     # ejercicio: el codigo se muestra siempre
+    code-tools: true
+    fig-format: retina   # 2x para pantallas HiDPI
+    grid:
+      body-width: 780px     # 80 caracteres de codigo sin partir
+      sidebar-width: 220px
+      margin-width: 250px
+    include-in-header:
+      - text: |
+          <style>
+          /* no horizontal scrollbar on wide console output (required) */
+          pre { white-space: pre-wrap; word-wrap: break-word; }
+          /* rendered output (results/console): grey left edge. Code chunks left unstyled. */
+          div.cell-output, div.cell-output-stdout {
+            border-left: 4px solid #bdbdbd;
+            border-radius: 4px;
+            background-color: #fcfcfc;
+            padding-left: 0.6em;
+            margin-top: 0.3em;
+          }
+          /* figures: no box */
+          div.cell-output-display { border-left: none; background-color: transparent; padding-left: 0; }
+          </style>
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Antes de empezar
+
+Abre antes el proyecto `exercises.Rproj`: `here()` busca los datos desde ahí. Ejecuta este bloque primero: carga los paquetes.
+
+```{r}
+#| label: setup
+
+# install.packages(c("tidyverse", "here", "jsonlite", "ggdist", "lme4",
+#                    "performance", "see"))
+library(tidyverse)
+library(here)    # rutas desde la raiz del proyecto (exercises.Rproj)
+library(ggdist)  # la nube y la lluvia del raincloud plot
+library(lme4)    # lmer(), el modelo lineal mixto
+library(see)     # dibuja los graficos de performance::check_model()
+
+options(scipen = 999, width = 80)  # sin notacion cientifica
+```
+
+# Los datos
+
+## El preprocesamiento
+
+`source()` ejecuta entero el script `day1_04_ldt_preprocesamiento.R`, que lee el archivo de JATOS, limpia los datos y guarda `ldt_rt.csv` en `data/processed_data/`. Lo que imprime es la verificación del preprocesamiento: la precisión de cada participante, cuántos ensayos quedan después de cada paso, la tabla de errores y *outliers* por participante y el gráfico de los *outliers*.
+
+Si ya tienes `ldt_rt.csv`, pon un `#` delante de la línea de `source()`.
+
+```{r}
+#| label: ldt-preprocessing
+#| fig-width: 8
+#| fig-height: 5
+
+source(here("scripts", "day1_04_ldt_preprocesamiento.R"))
+```
+
+## Los datos limpios
+
+Una fila por ensayo: solo palabras, solo aciertos, sin anticipaciones ni tiempos extremos. `participante` es la etiqueta anónima de cada persona, `estimulo` la palabra, `frecuencia_palabra` y `frecuencia_silabica` son alta o baja, y `RT` es el tiempo de respuesta en ms.
+
+```{r}
+#| label: ldt-data
+
+ldt <- read_csv(
+  file = here("data", "processed_data", "ldt_rt.csv"),
+  show_col_types = FALSE
+)
+print(ldt)
+```
+
+# Ejercicio 1. Conocer los datos
+
+Cuántos participantes y cuántas palabras distintas hay.
+
+```{r}
+#| label: ex1-counts
+
+n_distinct(ldt$participante)
+n_distinct(ldt$estimulo)
+```
+
+Cuántos ensayos tiene cada participante en cada frecuencia.
+
+```{r}
+#| label: ex1-trials
+
+xtabs(formula = ~ participante + frecuencia_palabra, data = ldt)
+```
+
+El cruce de participante y palabra: cada participante ve todas las palabras y cada palabra la ven todos los participantes (un 0 es un ensayo que se quitó por error o por tiempo extremo). Participante y palabra están **cruzados**.
+
+```{r}
+#| label: ex1-crossed
+
+xtabs(formula = ~ estimulo + participante, data = ldt)
+```
+
+Un boxplot para ver la diferencia entre las dos condiciones: el RT de todos los ensayos con palabras de frecuencia alta y de frecuencia baja.
+
+```{r}
+#| label: ex1-boxplot
+#| fig-width: 5
+#| fig-height: 4
+
+grafico_boxplot <- ggplot(
+  data = ldt,
+  mapping = aes(x = frecuencia_palabra, y = RT, fill = frecuencia_palabra)
+) +
+  geom_boxplot(alpha = 0.8) +
+  labs(x = "Frecuencia de la palabra", y = "Tiempo de respuesta (ms)") +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none")  # el eje x ya dice la frecuencia
+grafico_boxplot
+```
+
+# Ejercicio 2. Visualizar: un raincloud plot por participante
+
+Un panel por participante y, dentro de cada panel, las palabras de frecuencia alta y baja.
+
+```{r}
+#| label: ex2-raincloud
+#| column: page-right
+#| fig-width: 12
+#| fig-height: 8
+
+grafico_raincloud <- ggplot(
+  data = ldt,
+  mapping = aes(x = frecuencia_palabra, y = RT, fill = frecuencia_palabra)
+) +
+  # la NUBE: media densidad, a la derecha de cada frecuencia
+  ggdist::stat_halfeye(
+    adjust = 0.6,           # suavizado de la densidad (< 1 = mas detalle)
+    width = 0.5,            # anchura maxima de la nube
+    justification = -0.3,   # la desplaza a la derecha, fuera de la caja
+    .width = 0,             # sin intervalo bajo la nube
+    point_colour = NA,      # sin el punto de la mediana (lo pone la caja)
+    alpha = 0.7             # transparencia
+  ) +
+  # la CAJA: el boxplot de siempre, estrecho
+  geom_boxplot(
+    width = 0.12,           # estrecho, para que quepa entre nube y lluvia
+    outliers = FALSE,       # los extremos ya estan en la lluvia
+    alpha = 0.8
+  ) +
+  # la LLUVIA: un punto por ensayo, apilados a la izquierda
+  ggdist::stat_dots(
+    side = "left",          # a la izquierda de la caja
+    justification = 1.2,    # la separa de la caja
+    binwidth = 20,          # anchura de cada fila de puntos (en ms)
+    dotsize = 0.9,          # tamano del punto
+    alpha = 0.5,
+    overflow = "compress"   # si no caben, los aprieta en vez de salirse
+  ) +
+  facet_wrap(~ participante) +   # un panel por participante
+  labs(x = "Frecuencia de la palabra", y = "Tiempo de respuesta (ms)") +
+  theme_classic(base_size = 14) +
+  theme(legend.position = "none")  # el eje x ya dice la frecuencia
+grafico_raincloud
+```
+
+# Ejercicio 3. Codificar la frecuencia: *deviation coding* (-0.5 / +0.5)
+
+Como en el tutorial 1: cada nivel a media unidad del 0. Frecuencia alta = -0.5 y frecuencia baja = +0.5. Así el intercepto del modelo es el RT medio de las dos frecuencias y la pendiente, la diferencia entre baja y alta.
+
+```{r}
+#| label: ex3-coding
+
+ldt <- ldt |>
+  mutate(frecuencia_dev = if_else(frecuencia_palabra == "alta", -0.5, 0.5))
+
+# Comprobar la codificacion: alta con -0.5 y baja con 0.5
+xtabs(formula = ~ frecuencia_palabra + frecuencia_dev, data = ldt)
+```
+
+# Ejercicio 4. Modelo mixto: interceptos variables por participante y por palabra
+
+`(1 | participante)`: cada participante tiene su propio intercepto (hay gente más rápida y gente más lenta). `(1 | estimulo)`: cada palabra tiene el suyo.
+
+`REML = TRUE` (el valor por defecto de `lmer()`) es la estimación que se usa para interpretar un modelo: estima mejor las varianzas de los efectos aleatorios.
+
+```{r}
+#| label: ex4-intercepts
+
+ldt_model <- lmer(
+  formula = RT ~ frecuencia_dev + (1 | participante) + (1 | estimulo),
+  data = ldt, REML = TRUE
+)
+summary(ldt_model)
+```
+
+# Ejercicio 5. El p-valor de la frecuencia: test de razón de verosimilitudes
+
+Para comparar dos modelos que se diferencian en los efectos fijos hay que ajustarlos con máxima verosimilitud: `REML = FALSE` en los dos, y la misma estructura aleatoria. El modelo nulo no lleva la frecuencia, el completo sí. Estos dos modelos solo sirven para el test: los coeficientes se leen en el modelo con `REML = TRUE`.
+
+```{r}
+#| label: ex5-lrt
+
+ldt_null_ml <- lmer(
+  formula = RT ~ 1 + (1 | participante) + (1 | estimulo),
+  data = ldt, REML = FALSE
+)
+ldt_model_ml <- lmer(
+  formula = RT ~ frecuencia_dev + (1 | participante) + (1 | estimulo),
+  data = ldt, REML = FALSE
+)
+
+# Likelihood Ratio Test (LRT)
+anova(ldt_null_ml, ldt_model_ml)
+```
+
+# Ejercicio 6. Pendientes variables
+
+La pendiente de la frecuencia varía por participante: cada participante ve palabras de las dos frecuencias. Por palabra no se puede: cada palabra tiene una sola frecuencia.
+
+`REML = TRUE` otra vez: es un modelo para interpretar, no para un test de efectos fijos.
+
+```{r}
+#| label: ex6-slopes
+#| message: true
+
+ldt_model_slopes <- lmer(
+  formula = RT ~ frecuencia_dev +
+    (1 + frecuencia_dev | participante) + (1 | estimulo),
+  data = ldt, REML = TRUE
+)
+summary(ldt_model_slopes)
+```
+
+`TRUE` = modelo degenerado (singular).
+
+```{r}
+#| label: ex6-singular
+
+isSingular(ldt_model_slopes)
+```
+
+# Ejercicio 7. Supuestos del modelo mixto
+
+```{r}
+#| label: ex7-check-model
+#| fig-width: 10
+#| fig-height: 11
+
+performance::check_model(ldt_model_slopes)
+```
+
+# Ejercicio 8. Cómo redactarlo
+
+La referencia de `lme4` para citarla en el artículo.
+
+```{r}
+#| label: ex8-citation
+
+citation("lme4")
+```
+
+# Session information
+
+```{r}
+#| label: session-info
+#| code-fold: true
+
+sessionInfo()
+```
+
